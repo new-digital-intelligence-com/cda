@@ -21,14 +21,21 @@ export default function Home() {
             <span className="rounded-md bg-cda-red px-2.5 py-1 text-xl font-extrabold tracking-wider">CDA</span>
             <span className="text-lg font-semibold">Customer Assistant</span>
           </div>
-          <a
-            href="https://www.cda.co.uk/customer-care/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden text-sm text-white/80 hover:text-white sm:block"
-          >
-            CDA Customer Care ↗
-          </a>
+          <div className="flex items-center gap-4">
+            <a
+              href="https://www.cda.co.uk/customer-care/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden text-sm text-white/80 hover:text-white sm:block"
+            >
+              CDA Customer Care ↗
+            </a>
+            <form action="/api/logout" method="post">
+              <button type="submit" className="rounded-full border border-white/30 px-3 py-1 text-xs text-white/80 hover:text-white">
+                Log out
+              </button>
+            </form>
+          </div>
         </div>
         <div className="h-1 bg-cda-red" />
       </header>
