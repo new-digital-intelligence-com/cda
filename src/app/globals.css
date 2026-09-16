@@ -1,26 +1,38 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* Palette taken from the CDA website theme (www.cda.co.uk/wp-content/themes/cda/style.css) */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-cda-red: #e84339;
+  --color-cda-red-dark: #c8362d;
+  --color-cda-dark: #222222;
+  --color-cda-grey: #e7e6e6;
+  --color-cda-grey-light: #f4f3f3;
+  --color-cda-blue: #9dbdcb;
+  --color-cda-text: #666666;
+  --color-cda-ink: #333333;
+  --font-sans: var(--font-figtree);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-cda-grey-light);
+  color: var(--color-cda-ink);
 }
+
+@keyframes cda-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+.typing-dot {
+  animation: cda-bounce 1.2s infinite ease-in-out;
+}
+
+.chat-markdown p { margin: 0 0 0.5rem; }
+.chat-markdown p:last-child { margin-bottom: 0; }
+.chat-markdown ul, .chat-markdown ol { margin: 0.25rem 0 0.5rem 1.25rem; }
+.chat-markdown ul { list-style: disc; }
+.chat-markdown ol { list-style: decimal; }
+.chat-markdown a { color: var(--color-cda-red); text-decoration: underline; }
+.chat-markdown strong { color: var(--color-cda-dark); }
+.chat-markdown table { border-collapse: collapse; margin: 0.5rem 0; font-size: 0.875rem; }
+.chat-markdown th, .chat-markdown td { border: 1px solid var(--color-cda-grey); padding: 0.25rem 0.5rem; }
