@@ -1,6 +1,6 @@
 import { hasValidSession } from "@/lib/session";
 
-const DEFAULT_MAX_SESSION_SECONDS = 180;
+const DEFAULT_MAX_SESSION_SECONDS = 120;
 
 // Creates a short-lived LiveAvatar embed that talks to the ElevenLabs agent (via the stored voice agent).
 // Keeps the LiveAvatar API key on the server.

@@ -20,7 +20,7 @@ export function AvatarPanel() {
         setState({ status: "error", message: body.error ?? "Could not start the avatar. Please try again." });
         return;
       }
-      setState({ status: "active", url: body.url, maxSeconds: body.maxSeconds ?? 180 });
+      setState({ status: "active", url: body.url, maxSeconds: body.maxSeconds ?? 120 });
     } catch {
       setState({ status: "error", message: "Could not start the avatar. Please try again." });
     }
