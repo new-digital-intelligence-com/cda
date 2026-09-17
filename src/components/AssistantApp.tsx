@@ -2,6 +2,7 @@
 
 import { ConversationProvider, useConversation } from "@elevenlabs/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AvatarPanel } from "./AvatarPanel";
 import { MessageBubble, TypingIndicator } from "./MessageBubble";
 import { VoiceOrb } from "./VoiceOrb";
 import {
@@ -21,6 +22,12 @@ const SUGGESTIONS = [
 ];
 
 type PendingMessage = { text: string; files: File[] };
+
+const TAB_LABELS: Record<AssistantMode, string> = {
+  chat: "💬 Chat",
+  voice: "🎙️ Voice",
+  avatar: "🧑‍💼 Avatar",
+};
 
 export default function AssistantApp() {
   return (
@@ -200,7 +207,7 @@ function Assistant() {
     <section className="flex min-h-[640px] flex-col overflow-hidden rounded-xl bg-white shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-cda-grey px-4 py-3">
         <div className="flex rounded-full bg-cda-grey p-1" role="tablist" aria-label="Assistant mode">
-          {(["chat", "voice"] as const).map((item) => (
+          {(["chat", "voice", "avatar"] as const).map((item) => (
             <button
               key={item}
               role="tab"
@@ -210,11 +217,11 @@ function Assistant() {
                 mode === item ? "bg-cda-red text-white shadow" : "text-cda-ink hover:text-cda-dark"
               }`}
             >
-              {item === "chat" ? "💬 Chat" : "🎙️ Voice"}
+              {TAB_LABELS[item]}
             </button>
           ))}
         </div>
-        <StatusPill status={status} />
+        {mode !== "avatar" && <StatusPill status={status} />}
       </div>
 
       {error && (
@@ -337,7 +344,7 @@ function Assistant() {
             )}
           </div>
         </>
-      ) : (
+      ) : mode === "voice" ? (
         <div className="flex flex-1 flex-col">
           <div className="flex flex-col items-center px-4 pt-6">
             <VoiceOrb
@@ -393,6 +400,8 @@ function Assistant() {
             <div ref={listEndRef} />
           </div>
         </div>
+      ) : (
+        <AvatarPanel />
       )}
     </section>
   );

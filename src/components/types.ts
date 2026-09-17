@@ -11,7 +11,7 @@ export type ChatMessage = {
   attachments?: Attachment[];
 };
 
-export type AssistantMode = "chat" | "voice";
+export type AssistantMode = "chat" | "voice" | "avatar";
 
 export const ACCEPTED_FILE_TYPES = "image/png,image/jpeg,image/webp,image/gif,application/pdf";
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
