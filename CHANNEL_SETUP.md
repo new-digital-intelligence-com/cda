@@ -79,12 +79,31 @@ same prompt, the same knowledge base and the same model, so answers are consiste
 | Agent ID | `agent_3601m2p374tce96b7p6hdfz5f1tv` |
 | Branch | `Main` (100% of live traffic) |
 | LLM | Gemini 3.7 Flash |
-| Voice | British voice from the voice library (`4CrZuIW9am7gYAxgo2Af`) |
+| Voice | **Shelley – Clear, Confident and British** (young British female, voice library, `4CrZuIW9am7gYAxgo2Af`) |
 | Language | English (answers in the customer's language) |
 | Time zone | Europe/London |
 | First message | "Hello, you're through to CDA's virtual assistant, Ellie. How can I help you today?" |
 | File input | Enabled: images and PDFs, max 10 files per conversation |
 | Audio format | **PCM 24000 Hz** input and output (required by HeyGen LiveAvatar) |
+
+### Voice models (checked 17 Sep 2026)
+
+Used by the **web voice tab, the video avatar and phone calls**. Text channels (web chat, Telegram, email,
+Instagram, Slack) only use the LLM.
+
+| Part | Model / setting |
+|---|---|
+| Speech to text (hearing the customer) | **Scribe Realtime**, quality **high** |
+| Text to speech (Ellie speaking) | **Eleven Flash v2** (fastest model), stability 0.5, similarity 0.8, speed 1.0 |
+| Voice | **Shelley – Clear, Confident and British** |
+| LLM (the "brain") | **Gemini 3.7 Flash**, temperature 0 |
+| Turn-taking (knowing when the customer finished talking) | **turn_v3**, eagerness normal, turn timeout 7 s |
+| Audio format | PCM 24000 Hz in and out |
+| Cost | About **600 ElevenLabs credits per voice minute** (measured on a 95-second avatar call) |
+
+> **Flash v2 is English-only.** The prompt tells Ellie to answer in the customer's language: fine in text
+> channels, but in voice a non-English reply is read with an English voice. For other languages in voice,
+> switch to **Flash v2.5** (multilingual) and add the languages in the agent's language settings.
 
 ### System prompt sections
 
@@ -642,6 +661,35 @@ Example prompts:
 | **WhatsApp** | Parked | Meta restricted the WhatsApp Business account; needs an appeal and an own brand name. Live calls also need a 2,000/day messaging limit |
 | **Phone number** | Parked | No real phone number; the SIP import of a mobile number was removed (mobile SIMs can't route to SIP) |
 | **Copilot mode** | Parked | Draft-only mode (e.g. Freshdesk Shadow Mode, or a second agent) |
+
+### Phone calls: what's needed
+
+ElevenLabs does not sell phone numbers. It connects numbers from **Twilio**, any **SIP trunk** provider
+(Telnyx, Plivo, Bandwidth, Vonage…) or **Exotel**. Twilio is not required, but it is the easiest.
+
+| Need | Details |
+|---|---|
+| Phone company account | **Twilio** (paste Account SID + Auth Token or an API key; ElevenLabs configures the number automatically) **or** a SIP provider (SIP address, TCP/TLS transport, username + password) |
+| A number that can receive calls | Must be **bought** in that account (a Twilio "verified caller ID" only allows outbound calls). UK numbers usually need an ID/address check. Small monthly fee + per-minute fee |
+| ElevenLabs | **Agents → Phone Numbers → Import** → assign Ellie. Creator plan is enough. **No audio change needed**: phone audio is handled separately from the agent's PCM 24k setting |
+| Protection against credit drain | Anyone can call a public number: set a **max call duration** (e.g. 5 min), a **daily call limit** and a **concurrency limit** |
+| Prompt tweaks | Already: 1–3 short sentences on phone. Add: read phone numbers slowly, no web links (offer email instead), say early that it's an AI and the call may be recorded |
+| Optional | **Transfer to number** tool (hand the call to a human, e.g. CDA customer care); **outbound "Ellie calls you"** with your own mobile as Twilio verified caller ID (no bought number, Twilio per-minute charges) |
+
+Cheapest test: **Twilio free trial** + one Twilio number → import into ElevenLabs → assign Ellie. Trial calls
+play a short "trial account" message, so upgrade Twilio before showing it to CDA. A normal mobile SIM cannot be used.
+
+### More channel ideas
+
+| Channel | How | Cost | Effort |
+|---|---|---|---|
+| **Facebook Messenger** | Same as Instagram: Make.com + Custom Channel, same Meta app | Free (needs a Facebook Page) | Low (copy the Instagram scenarios) |
+| **Email without Freshdesk** | Make.com Gmail module + Custom Channel | Free | Low, useful when the Freshdesk trial ends (~1 Oct 2026) |
+| **WhatsApp** | Native ElevenLabs (messages and voice calls) | Free | Blocked while Meta restricts the account; voice calls need a 2,000/day messaging limit |
+| **Intercom / Zendesk** | Native ElevenLabs triggers | Paid after a trial | Medium |
+
+Make.com free plan = **1,000 operations a month shared by all scenarios** (each Instagram message uses several),
+enough for a demo but not for real traffic.
 
 ---
 
