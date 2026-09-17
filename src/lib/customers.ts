@@ -90,6 +90,14 @@ export function identityFrom(body: Record<string, unknown>): Identity | null {
  */
 const FRESHDESK_TICKET = /_fd_(\d+)$/;
 
+/**
+ * The Telegram chat id is in the conversation id too (`..._tg_6486763839`). We read it from there
+ * rather than from `integration__telegram_chat_id`: giving that variable a placeholder stopped the
+ * Telegram trigger creating conversations at all, the same way `system__` variables cannot be
+ * overridden. `system__conversation_id` always exists and needs no placeholder.
+ */
+const TELEGRAM_CHAT = /_tg_(\d+)$/;
+
 async function freshdeskRequester(conversationId: string): Promise<{ email: string; name?: string } | null> {
   const ticket = conversationId.match(FRESHDESK_TICKET)?.[1];
   const apiKey = process.env.FRESHDESK_API_KEY;
@@ -121,6 +129,10 @@ export async function resolveIdentity(
   if (direct) return direct;
 
   const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : "";
+
+  const telegram = conversationId.match(TELEGRAM_CHAT)?.[1];
+  if (telegram) return { channel: "telegram", key: telegram };
+
   const requester = await freshdeskRequester(conversationId);
   return requester ? { channel: "email", key: requester.email, name: requester.name } : null;
 }
