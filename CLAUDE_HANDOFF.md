@@ -114,16 +114,14 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
 
 ## 5. Open tasks (in order)
 
-0. **Cross-channel customer memory** – **live** on Telegram, email and the website. Details: CHANNEL_SETUP.md §16.
-   Done: Supabase project + schema, all env vars (local + Vercel), the three routes deployed and tested
-   against production, both agent tools created and attached, the prompt block added, the post-call
-   webhook created and linked. The agent API commits straight to Main, so no Publish step was needed.
-   - **Left to do:** add `"dynamic_variables": {"instagram_id": "<sender id>"}` to the Make scenario
-     "IG – Instagram in" (top level, next to `data`), or Instagram customers are not recognised
-   - **Left to do:** the user tests it — Telegram first, then the same email on another channel
-   - Weak spot: email identity relies on the undocumented `_fd_<ticket>` ending of the conversation id
-   - Note: ElevenLabs' own `user_memory` setting is **off** on purpose — Telegram and email conversations
-     all carry the workspace owner's `user_id`, so switching it on would merge every customer into one memory
+0. **Cross-channel customer memory** - **live** on Telegram, email and the website (chat, voice,
+   avatar). Details: CHANNEL_SETUP.md §16. Customers create an account on the site and link each
+   channel by pasting a short code into it; Ellie never asks anyone to identify themselves.
+   - **Never** bind a tool parameter to a channel-specific dynamic variable: it breaks every other
+     channel, and a placeholder on  took Telegram down completely
+   - Left: Instagram (blocked by Meta), Slack ( exists, not wired up)
+   - Weak spot: Telegram and email identity rely on the undocumented / conversation id endings
+
 1. **Slack** – waiting for the user:
    - The "New Digital Intelligence" Slack workspace hit the free plan's 10-app limit → use a new demo workspace or remove an unused app.
    - User creates the **CDA_Support** app from the manifest in CHANNEL_SETUP.md §10, installs it, and gives the **Bot User OAuth Token** + **Signing Secret** and the mode (mention-only or all messages).

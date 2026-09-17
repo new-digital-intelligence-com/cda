@@ -731,43 +731,74 @@ enough for a demo but not for real traffic.
 
 ## 16. Cross-channel customer memory
 
-Ellie recognises the same person on every channel. A customer talks on Telegram and gives their
-email once; later they DM Instagram and give the same email once; from then on Ellie knows it is
-the same person everywhere, with no more questions.
+Ellie recognises the same person on every channel and remembers what they asked before. A customer
+creates an account on the website, then links each channel by pasting a short code into it.
 
-**The email address is the bridge.** Telegram, Instagram and Meta deliberately never tell you who
-their users are, so the only reliable link is something the customer tells you. An IP address is
-not usable: ElevenLabs stores none for chat channels, the IP you would see on Telegram or
-Instagram belongs to *their* servers (the same for every customer), and on the website one IP is
-shared by everyone on the same WiFi or mobile network.
+**Ellie never asks anyone to identify themselves.** Someone she cannot place is simply helped as
+normal. Recognition is something the customer switches on, not something she interrogates them for.
 
 ### How it works
 
 ```
-Start of any conversation → Ellie calls customer_lookup (silent)
-     known   → greets by name, can refer to the last topic
-     unknown → helps normally, asks nothing
-        └─ only if the request needs identity (repair, warranty, parts, order chase)
-             → asks once for the email → customer_link → the channels become one person
-After the conversation → ElevenLabs post-call webhook → one short note saved
+Website:  create account  ->  "+ Add a channel"  ->  CDA-4F2K9M
+                                                      |
+                              paste that code into Telegram (or email, ...)
+                                                      |
+                              that channel is now linked and verified
+
+Any message on any channel
+   -> customer_lookup(system__conversation_id)
+   -> known?  greet by name, may refer to the last few notes
+      unknown? just help, say nothing about it
+
+Conversation ends -> post-call webhook -> one short note saved
 ```
+
+### How each channel is identified
+
+The **only** dynamic variable used is `system__conversation_id`, because it is the one that exists
+on every channel. This matters, see the warning below.
+
+| Channel | How the person is identified |
+|---|---|
+| Telegram | The chat id is inside the conversation id: `conv_85_..._tg_6486763839` |
+| Email | The ticket number is inside the conversation id (`..._fd_9`); Freshdesk is then asked who the requester is, which also gives their name |
+| Website chat / voice / avatar | The server registers the conversation against the signed-in account, or the `cda_visitor` cookie, when the session is created |
+| Instagram | Make sends `dynamic_variables: {"instagram_id": ...}`, but the channel is blocked by Meta |
+| Slack | `integration__slack_user_id` exists, but is not wired up yet |
+
+> **Never bind a tool parameter to a channel-specific dynamic variable.** Doing so makes the
+> conversation fail on every other channel with *"Missing required dynamic variables in tools"*, and
+> giving `integration__telegram_chat_id` a placeholder stopped the Telegram trigger creating
+> conversations at all. Both mistakes were made on 17 Sep 2026 and both took the channel down.
+> If a channel's id is not in the conversation id, register the conversation server-side instead,
+> the way the website does.
+
+> The `_tg_<id>` and `_fd_<ticket>` endings are **not documented**. If ElevenLabs changes them, that
+> channel quietly stops being recognised and everything else carries on.
 
 ### The database (Supabase)
 
-Run `supabase/schema.sql` once in the Supabase project (SQL Editor → New query → paste → Run).
+Run `supabase/schema.sql` once (SQL Editor -> New query -> paste -> Run).
 
 | Table | Holds |
 |---|---|
-| `customers` | id, email (unique), name |
-| `customer_channels` | channel + channel key → customer id |
-| `customer_conversations` | conversation id → customer, so the post-call note knows where to go |
-| `customer_notes` | one short line per conversation |
+| `customers` | the person: id, name, and their Supabase Auth user once they sign up |
+| `customer_channels` | channel + key -> customer, with `verified`. **Several rows of the same kind are fine**, so one person can have two email addresses or two Telegram accounts |
+| `link_codes` | the short codes: one use, 30 minutes |
+| `customer_conversations` | conversation -> customer, so the post-call note knows where to go |
+| `customer_notes` | one short line per conversation; Ellie sees the last 3 |
 
-Row level security is on with no policies, so **only** the service role key (server side) can read
-the data. The publishable key sees nothing.
+Row level security is on with no policies, so only the service role key can read it.
 
-Channel keys: `telegram` = chat id, `instagram` = sender id, `website` = the `cda_visitor` cookie,
-`email` = the address itself (so email needs no question at all), `slack` = Slack user id.
+### Accounts
+
+Supabase Auth, created through its admin endpoint with `email_confirm: true`, so nobody waits for a
+confirmation email during a demo. The password is only ever checked by Supabase. After signing in
+the app sets its own signed cookie holding the customer id, so there is no JWT refresh to handle.
+The site password lock is unchanged and still wraps the whole site.
+
+Signing up links that email address automatically and marks it verified.
 
 ### The routes in the web app
 
@@ -776,85 +807,13 @@ Channel keys: `telegram` = chat id, `instagram` = sender id, `website` = the `cd
 | `POST /api/agent/customer-lookup` | tool `customer_lookup` | `x-cda-agent-secret` header |
 | `POST /api/agent/customer-link` | tool `customer_link` | `x-cda-agent-secret` header |
 | `POST /api/agent/post-call` | ElevenLabs post-call webhook | HMAC signature |
+| `GET/POST/DELETE /api/account` | the account panel | site password + account cookie |
 
-These three are exempt from `SITE_PASSWORD` in `src/proxy.ts` because ElevenLabs calls them, not a
-browser. They carry their own proof instead — see `src/lib/agentAuth.ts`.
+The three `/api/agent/*` routes are exempt from `SITE_PASSWORD` in `src/proxy.ts` because ElevenLabs
+calls them, not a browser. A lookup that fails always answers "not found" with status 200, so a
+customer never sees an error because the database was slow.
 
-A lookup that fails always answers "not found" with status 200, so a customer never sees an error
-because the database was slow or down.
-
-### The two tools on the agent
-
-Agent → **Tools** → **Add tool** → **Webhook**. Put the secret in **Workspace secrets** first, then
-pick it for the header.
-
-**`customer_lookup`** — `POST https://cda-nine-ebon.vercel.app/api/agent/customer-lookup`
-
-Description for the LLM: *"Check whether this person has contacted CDA before. Call once, silently,
-at the very start of every conversation. Never mention this tool."*
-
-| Body parameter | Value type | Value |
-|---|---|---|
-| `conversation_id` | Dynamic variable | `system__conversation_id` |
-| `telegram_chat_id` | Dynamic variable | `integration__telegram_chat_id` |
-| `website_id` | Dynamic variable | `website_id` (sent by the web app) |
-| `instagram_id` | Dynamic variable | *(confirm the name first — see below)* |
-| `email_address` | Dynamic variable | *(confirm the name first — see below)* |
-
-Returns `{ found, name, channels, recent }`. `recent` is at most three short lines.
-
-**`customer_link`** — `POST https://cda-nine-ebon.vercel.app/api/agent/customer-link`
-
-Description for the LLM: *"Save the email address the customer just gave so CDA recognises them on
-every channel. Call once, right after they give it."*
-
-Same parameters as above, plus `email` (LLM, required) and `name` (LLM, optional).
-Returns `{ ok, name, channels, recent }` — including what they told us on **other** channels.
-
-> Every dynamic variable used above needs a **placeholder / default of an empty string** in
-> Agent → Dynamic variables. Otherwise the tool call fails on the channels where that variable
-> does not exist (for example `integration__telegram_chat_id` on Instagram).
-
-### The post-call webhook
-
-ElevenLabs → **Settings** → **Webhooks** → add
-`https://cda-nine-ebon.vercel.app/api/agent/post-call`, event **post_call_transcription**.
-Copy the signing secret into `ELEVENLABS_WEBHOOK_SECRET` (`.env.local` **and** Vercel → Redeploy).
-
-This writes the memory, so no extra tool call is needed during the conversation.
-
-### Prompt block to add
-
-```
-# Recognising the customer
-
-At the very start of every conversation, call customer_lookup once. Never mention the tool and
-never read out any id.
-
-If it returns found = true:
-- Greet them by their first name.
-- You may briefly refer to what "recent" says, if it is relevant to what they ask now.
-- Do NOT read out addresses, order numbers, dates or other personal details from memory. If they
-  ask about something personal, first ask them to confirm one detail (for example the postcode on
-  the account), then continue.
-
-If it returns found = false:
-- Say nothing about it. Help them normally and ask no questions.
-- Only when the request needs their identity - booking an engineer, warranty, ordering a part,
-  chasing an existing repair or order - ask once for their email address, and say why:
-  "I can arrange that - what's the best email for the confirmation?"
-- When they give it, call customer_link with that email (and their name if you know it), then
-  carry on. If customer_link returns recent items from another channel, you may say that you can
-  see their earlier message.
-- If they would rather not give an email, say that is no problem and keep helping.
-
-Never ask for the email twice in one conversation, and never ask for it just to say hello.
-```
-
-### What is already set up (17 Sep 2026)
-
-All of this was done through the API and is **live**: the Main branch is at 100% of traffic and
-`draft_exists` is false, so there was no separate Publish step.
+### What is set up on the agent
 
 | Thing | ID |
 |---|---|
@@ -863,61 +822,29 @@ All of this was done through the API and is **live**: the Main branch is at 100%
 | Tool `customer_link` | `tool_0301m2rhvckwepns0q0dhn26xnvr` |
 | Post-call webhook | `5c8daa58c85c43feacc9c0b2e9599f77` |
 
-Also set on the agent: both tool IDs attached, the prompt block added, the post-call webhook linked
-through `workspace_overrides.webhooks.post_call_webhook_id`, and **empty placeholders** for
-`integration__telegram_chat_id`, `integration__slack_user_id`, `instagram_id` and `website_id`.
-Those placeholders matter: without them the tool call fails on the channels where a variable does
-not exist. Voice, LLM, RAG and all 31 knowledge documents were re-read afterwards and unchanged.
+Both tools take only `conversation_id` (bound to `system__conversation_id`); `customer_link` also
+takes the `code` the customer typed. There are **no dynamic variable placeholders** on the agent.
+The prompt block is under "# Recognising the customer".
 
-Backup of the agent before the change: `agent-backup.json` (kept outside the repository).
-
-### The one step left
-
-**Instagram**: add the dynamic variable to the Make scenario, as shown below. Until that is done
-Instagram customers simply are not recognised, and every other channel works normally.
-
-### How each channel is identified
-
-| Channel | Identifier | Where it comes from |
-|---|---|---|
-| Telegram | `integration__telegram_chat_id` | Provided by the integration (documented) |
-| Slack | `integration__slack_user_id` | Provided by the integration (documented) |
-| Website / voice | `website_id` | The web app sends it with the session (cookie `cda_visitor`) |
-| Instagram | `instagram_id` | **We** put it in the Make request — see below |
-| Email | the sender's address | Looked up from the Freshdesk ticket — see below |
-
-**Instagram.** The Custom Channel payload takes a **top-level** `dynamic_variables` object, so the
-name is ours to choose. Add this to the HTTP body in the Make scenario **"IG – Instagram in"**,
-next to `data` and `user_message_id`:
-
-```json
-"dynamic_variables": { "instagram_id": "<sender id>" }
-```
-
-**Email.** Freshdesk provides no dynamic variables, and ElevenLabs strips the sender's address from
-the text the agent sees — a real email arrived as just `"I need a support"`. But the conversation id
-ends with the ticket number (`conv_52_0dcad3387484c5fa_fd_8` → ticket 8), and `system__conversation_id`
-is available everywhere. So `customer_lookup` reads the ticket number, asks Freshdesk
-`GET /api/v2/tickets/{id}?include=requester`, and uses the requester's address as the key. It also
-gets their name, so Ellie can greet them properly on the very first email — no question asked.
-
-> That `_fd_<number>` format is **not documented**. If ElevenLabs changes it, email quietly stops
-> being recognised and every other channel carries on; the code returns "not found" rather than
-> failing. Tested 17 Sep 2026 against ticket 8.
+The agent API commits straight to the Main branch, which is at 100% of traffic with no draft, so
+there is no separate Publish step.
 
 ### Verified by test
 
 Run against the live site and the real Supabase project on 17 September 2026:
 
-- wrong secret → 401; unsigned post-call webhook → 401
-- link on Telegram, then link on Instagram with the same email → one customer, both channels
-- email with **only** a conversation id → recognised as "Helmi Lakhder" with no question
-- unknown ticket number and a non-Freshdesk id → "not found", no error
-- post-call webhook with a valid signature → note saved and visible on the other channel
+- wrong secret -> 401; unsigned post-call webhook -> 401
+- unknown Telegram chat -> helped normally, no question asked
+- account created -> email linked and verified automatically
+- code redeemed from Telegram -> both channels on one customer, code refused on second use
+- a Telegram chat held **before** linking keeps its notes after linking
+- website chat, voice and the avatar carry the Telegram context for a signed-in person
+- an unknown ticket number and a non-Freshdesk id -> "not found", no error
 
 ### Privacy
 
 Customer records across channels are personal data under UK GDPR. For the demo use **fake
-customers only**. A typed email proves nothing, which is why the prompt makes Ellie verify one
-detail before revealing anything personal. The service role key is server-side only and must never
-be committed — this repository is public.
+customers only**. Linking by code proves the channel belongs to the account, which a typed email
+address never did. The prompt still makes Ellie confirm one detail before revealing anything
+personal. The service role key is server-side only and must never be committed: this repository is
+public.
