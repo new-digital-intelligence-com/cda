@@ -6,7 +6,7 @@ It is a demo and not an official CDA service.
 Last updated: **17 September 2026**
 
 > **Secrets are not written in this file.** API keys, tokens and passwords are stored in the tools
-> themselves (ElevenLabs, Make.com, LiveAvatar, Slack, Vercel, `.env.local`). See [Credentials and where they live](#12-credentials-and-where-they-live).
+> themselves (ElevenLabs, Make.com, Anam, Slack, Vercel, `.env.local`). See [Credentials and where they live](#12-credentials-and-where-they-live).
 
 ---
 
@@ -20,7 +20,7 @@ Last updated: **17 September 2026**
 6. [Web chat and voice (ElevenLabs hosted page)](#6-web-chat-and-voice-elevenlabs-hosted-page)
 7. [Custom web app (Next.js on Vercel)](#7-custom-web-app-nextjs-on-vercel)
 8. [Instagram (Make.com + ElevenLabs Custom Channel)](#8-instagram-makecom--elevenlabs-custom-channel)
-9. [Video avatar (HeyGen LiveAvatar)](#9-video-avatar-heygen-liveavatar)
+9. [Video avatar (Anam)](#9-video-avatar-anam)
 10. [Slack (in progress)](#10-slack-in-progress)
 11. [Admin through Claude (ElevenLabs connector)](#11-admin-through-claude-elevenlabs-connector)
 12. [Credentials and where they live](#12-credentials-and-where-they-live)
@@ -46,7 +46,7 @@ same prompt, the same knowledge base and the same model, so answers are consiste
  Next.js web app ───────►│  • 31 knowledge documents (RAG)          │
  (chat, voice, files)    │  • Agent mode: replies directly          │
                          │                                          │
- Avatar tab ─► HeyGen ──►│  (LiveAvatar draws the video face)       │
+ Avatar tab ─► Anam ────►│  (Anam draws Ellie's video face)         │
                          │                                          │
  Instagram DM ─► Make ──►│  (Custom Channel)                        │
                          │                                          │
@@ -63,7 +63,7 @@ same prompt, the same knowledge base and the same model, so answers are consiste
 | Web chat + voice | ElevenLabs hosted page (talk-to link) | No |
 | Web app | ElevenLabs React SDK in a Next.js app | Yes (own repo) |
 | Instagram | Make.com scenarios + ElevenLabs Custom Channel | No code (Make blocks) |
-| Video avatar | HeyGen LiveAvatar embed (ElevenLabs agent connector) in the web app's **Avatar** tab | Small (one API route + iframe) |
+| Video avatar | Anam avatar (our Ellie picture) joined to the ElevenLabs agent, in the web app's **Avatar** tab | Small (one API route + Anam SDK) |
 | Slack | Native ElevenLabs Slack trigger (in progress) | No |
 
 **Mode:** only **Agent mode** is active (Ellie replies directly). Copilot mode (draft only) is parked.
@@ -84,7 +84,7 @@ same prompt, the same knowledge base and the same model, so answers are consiste
 | Time zone | Europe/London |
 | First message | "Hello, you're through to CDA's virtual assistant, Ellie. How can I help you today?" |
 | File input | Enabled: images and PDFs, max 10 files per conversation |
-| Audio format | **PCM 24000 Hz** input and output (required by HeyGen LiveAvatar) |
+| Audio format | Input **PCM 16000 Hz** (required by Anam), output **PCM 24000 Hz** |
 
 ### Voice models (checked 17 Sep 2026)
 
@@ -98,7 +98,7 @@ Instagram, Slack) only use the LLM.
 | Voice | **Shelley – Clear, Confident and British** |
 | LLM (the "brain") | **Gemini 3.7 Flash**, temperature 0 |
 | Turn-taking (knowing when the customer finished talking) | **turn_v3**, eagerness normal, turn timeout 7 s |
-| Audio format | PCM 24000 Hz in and out |
+| Audio format | PCM 16000 Hz in, PCM 24000 Hz out |
 | Cost | About **600 ElevenLabs credits per voice minute** (measured on a 95-second avatar call) |
 
 > **Flash v2 is English-only.** The prompt tells Ellie to answer in the customer's language: fine in text
@@ -333,7 +333,7 @@ If used on a real site, add the domain in **Security → Allowlist**.
 - **Chat**: text-only session, markdown replies, suggested questions
 - **File upload**: images (PNG/JPG/WEBP/GIF) and PDFs, max 3 per message, 10 MB each (`uploadFile` + `sendMultimodalMessage`)
 - **Voice**: real-time WebRTC, animated orb, mute, end call, live transcript
-- **Avatar**: HeyGen LiveAvatar video call in an iframe, max 2 minutes per call (see section 9)
+- **Avatar**: Anam video call with our own Ellie face and live captions, max 3 minutes per call (see section 9)
 - **Other channels card**: buttons that open Email (Gmail compose to the support address), the Telegram bot and an Instagram DM (`src/components/ChannelLinks.tsx`)
 - **Password lock**: every page and API route requires `SITE_PASSWORD` (checked in `src/proxy.ts` and again in the API routes); site stays locked if the variable is missing
 
@@ -344,8 +344,8 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `src/components/AssistantApp.tsx` | Chat, voice and upload logic |
 | `src/app/api/elevenlabs/signed-url/route.ts` | Creates chat sessions (API key stays on the server) |
 | `src/app/api/elevenlabs/conversation-token/route.ts` | Creates voice sessions |
-| `src/components/AvatarPanel.tsx` | Avatar tab (start button + LiveAvatar iframe) |
-| `src/app/api/liveavatar/embed/route.ts` | Creates a LiveAvatar embed link (LiveAvatar key stays on the server) |
+| `src/components/AvatarPanel.tsx` | Avatar tab (Anam SDK video, captions, end call) |
+| `src/app/api/anam/session/route.ts` | Creates the Anam session token joined to Ellie (both API keys stay on the server) |
 | `src/proxy.ts`, `src/lib/auth.ts`, `src/app/login/` | Password lock |
 
 ### Environment variables (Vercel → Settings → Environment Variables, and `.env.local` locally)
@@ -355,10 +355,9 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `ELEVENLABS_API_KEY` | Server-side ElevenLabs key |
 | `ELEVENLABS_AGENT_ID` | `agent_3601m2p374tce96b7p6hdfz5f1tv` |
 | `SITE_PASSWORD` | Password for the demo site |
-| `LIVEAVATAR_API_KEY` | LiveAvatar API key (app.liveavatar.com → Developers) |
-| `LIVEAVATAR_AVATAR_ID` | Avatar shown in the Avatar tab (now the stock avatar `f86e8b45-3389-424a-b3d7-7f6e8729e36d`) |
-| `LIVEAVATAR_VOICE_AGENT_ID` | LiveAvatar voice agent linked to Ellie (LiveAvatar → Voice agents) |
-| `LIVEAVATAR_MAX_SESSION_SECONDS` | `120` (free plan maximum; the code default is also 120) |
+| `ANAM_API_KEY` | Anam API key (lab.anam.ai) |
+| `ANAM_AVATAR_ID` | Avatar shown in the Avatar tab: Sofia (our Ellie picture) `90e0c565-6c16-42a2-bd45-255f904df7a2` |
+| `ANAM_MAX_SESSION_SECONDS` | `180` (free plan maximum; the code default is also 180) |
 
 After changing a variable on Vercel → **Redeploy**.
 
@@ -464,62 +463,66 @@ Webhooks (ellie-reply)  ← Custom Channel "Reply Webhook URL"
 
 ---
 
-## 9. Video avatar (HeyGen LiveAvatar)
+## 9. Video avatar (Anam)
 
-The web app's **Avatar** tab shows a live talking face. **LiveAvatar only draws the face** and moves the
-lips; Ellie on ElevenLabs still listens, thinks and speaks.
+The web app's **Avatar** tab is a live video call with **our own Ellie face** (made from the same picture as
+the HeyGen video). **Anam only draws the face** and moves the lips; Ellie on ElevenLabs still listens,
+thinks and speaks, with the same prompt, voice and knowledge as every other channel.
 
 | Item | Value |
 |---|---|
-| Platform | **LiveAvatar** by HeyGen (app.liveavatar.com), **not** the HeyGen app (app.heygen.com) |
-| LiveAvatar plan | Free (10 credits a month) |
-| Avatar | Stock avatar **Marianne in Black Suit** (landscape), temporary until our own image avatar exists |
-| Voice agent | "CDA Assistant – Demo", type **ElevenLabs agent** (LiveAvatar runs it in LITE mode) |
-| ElevenLabs key in LiveAvatar | Stored as a LiveAvatar **secret** (type ElevenLabs API key) |
-| Max call length | **120 seconds** (free plan maximum) |
+| Platform | **Anam** (lab.anam.ai) |
+| Anam plan | Free: 30 minutes a month, **3-minute calls**, 1 custom avatar, 1 call at a time |
+| Avatar | **Sofia** = our Ellie picture (CDA background, headset), model **Cara 4** |
+| Performance | Director Notes preset `warm`, expressivity 0.5 |
+| Max call length | **180 seconds** (`ANAM_MAX_SESSION_SECONDS`, free plan maximum) |
+| Captions | Live transcript under the video |
+
+> The "Olivia" persona that Anam's onboarding creates (its own prompt, voice and GPT model) is **not used**:
+> the web app only borrows the Sofia face and plugs it into the ElevenLabs agent.
 
 ### How it works
 
 ```
 Visitor (logged in to the web app) → "Start video call"
-  → web app server: POST /api/liveavatar/embed → LiveAvatar API POST /v2/embeddings → embed link
-  → iframe embed.liveavatar.com → "Chat now" → LiveAvatar connects to Ellie on ElevenLabs
-  → Ellie's voice drives the avatar's lips
+  → web app server POST /api/anam/session
+       1. ElevenLabs: get a signed conversation URL for Ellie (API key stays on the server)
+       2. Anam: create a session token (avatar Sofia, cara-4, max length, elevenLabsAgentSettings)
+  → browser: Anam JavaScript SDK createClient(token) → streamToVideoElement → microphone on
+  → Anam's engine joins Ellie on ElevenLabs server-to-server: speech → Ellie → voice → lip-synced face
 ```
 
 ### Setup steps
 
-1. ElevenLabs agent → audio input **and** output format **PCM 24000 Hz** → **Publish**
-2. The ElevenLabs API key needs `convai_read`, `user_read`, `voices_read`, and the ElevenLabs plan must be **paid**
-   (LiveAvatar's ElevenLabs connector does not work with free ElevenLabs keys)
-3. app.liveavatar.com → add the ElevenLabs API key as a secret → **Voice agents** → new agent of type
-   ElevenLabs agent → pick the secret + Ellie's agent ID
-4. app.liveavatar.com → **Developers** → copy the LiveAvatar API key
-5. Vercel → the 4 `LIVEAVATAR_*` variables (section 7) → **Redeploy**
+1. lab.anam.ai → sign up → **Avatars** → create an avatar from the picture (about 2 minutes)
+2. lab.anam.ai → copy the **API key**
+3. ElevenLabs agent → **user input audio format = PCM 16000 Hz** (Anam supports no other input format);
+   output stays PCM 24000 Hz (Anam matches the output automatically)
+4. Vercel → `ANAM_API_KEY`, `ANAM_AVATAR_ID`, `ANAM_MAX_SESSION_SECONDS` (section 7) → **Redeploy**
 
-### Costs (measured on a test call, 17 Sep 2026)
+Optional (from Anam's guide): Turn **Eagerness** to *Eager* for faster replies; use the ElevenLabs
+**V3 Conversational** voice model so tags like `[laughs]` also change the avatar's expression.
 
-| Service | Cost |
-|---|---|
-| LiveAvatar | **1 credit per minute** (96-second call = 1.6 credits) |
-| ElevenLabs | about **600 credits per minute** (95-second call = 934 credits), same as a voice call |
+### Plans (anam.ai/pricing, 17 Sep 2026)
 
-| LiveAvatar plan | Credits a month | About |
-|---|---|---|
-| Free | 10 | 10 minutes |
-| Starter ($19) | 150 | 150 minutes |
-| Pro ($99) | 1,000 | 1,000 minutes |
+| Plan | Price | Minutes a month | Call length | Custom avatars | Notes |
+|---|---|---|---|---|---|
+| Free | $0 | 30 | 3 min | 1 | 1 call at a time |
+| Starter | $12 | 50 | 5 min | 2 | Commercial use, $0.16 per extra minute |
+| Explorer | $49 | 250 | 10 min | 3 | No watermark (embed), 3 calls at a time |
+| Growth | $299 | 2,000 | 2 h | 5 | 5 calls at a time |
 
-Creating the embed link is free; credits are only used once a call starts.
+ElevenLabs credits are used as for a voice call (about 600 credits a minute). Creating a session token is free;
+Anam minutes are only used once the video call starts.
 
-### Using our own "Ellie" image (not done yet)
+### Previous avatar: HeyGen LiveAvatar (removed 17 Sep 2026)
 
-- Avatars made in the **HeyGen app cannot be used** in LiveAvatar: separate avatar libraries, no import.
-- Needs a **paid LiveAvatar plan + a custom avatar slot** (add-on): LiveAvatar → **Custom Avatars** →
-  create an **Image** avatar from the same picture (high resolution, face to camera, plain background, landscape).
-- Then put the new avatar ID in `LIVEAVATAR_AVATAR_ID` → **Redeploy**. Nothing else changes: Ellie's
-  ElevenLabs voice is used, so the image avatar needs no voice of its own.
-- A paid plan may allow calls longer than 120 seconds (not confirmed); try a higher `LIVEAVATAR_MAX_SESSION_SECONDS`.
+The first Avatar tab used a HeyGen **LiveAvatar** embed (commit `69eb3da`) with a stock avatar. It was replaced because:
+- avatars made in the **HeyGen app** can't be used in LiveAvatar, and an own image avatar needs LiveAvatar **Essential ($99/month, 720p)**
+- the free plan stops calls after **120 seconds**, adds a watermark and has no own avatar
+
+To bring it back: restore `src/app/api/liveavatar/embed/route.ts` and the old `AvatarPanel.tsx` from git history,
+keep the agent's output format at PCM 24000 Hz and add the `LIVEAVATAR_*` variables again.
 
 ---
 
@@ -632,8 +635,8 @@ Example prompts:
 | Webhook verify token | Make filter "Meta verification" + Meta webhook settings | |
 | `SITE_PASSWORD` | Vercel env vars, `.env.local` | |
 | Make API token `claude-setup` | Make → Profile → API access | Delete when no longer needed |
-| LiveAvatar API key | Vercel env vars, `.env.local` | Was shared in chat → rotate after the demo |
-| ElevenLabs API key (copy used by LiveAvatar) | LiveAvatar secret | Update it too when the ElevenLabs key is rotated |
+| Anam API key | Vercel env vars, `.env.local` | Was shared in chat → rotate after the demo |
+| LiveAvatar API key + ElevenLabs key copy (old avatar) | LiveAvatar account | Not used any more → delete the LiveAvatar API key and secret |
 | Slack bot token + signing secret | ElevenLabs Slack connection | From the CDA_Support Slack app |
 
 ---
@@ -646,8 +649,8 @@ Example prompts:
 | Early/mid Oct 2026 | Make free operations reset (1,000/month) |
 | 17 Oct 2026 | ElevenLabs Creator credits reset |
 | **Before ~16 Nov 2026** | **Refresh the Instagram token** (link in section 8) and update the Make reply scenario header |
-| Monthly | LiveAvatar free plan gives 10 credits (about 10 avatar minutes) |
-| After the demo | Rotate the ElevenLabs API key (update Vercel **and** the LiveAvatar secret), rotate the LiveAvatar API key, delete the Make API token |
+| Monthly | Anam free plan gives 30 avatar minutes |
+| After the demo | Rotate the ElevenLabs API key (update Vercel), rotate the Anam API key, delete the Make API token and the old LiveAvatar key |
 | When CDA content changes | Update the PDFs in Drive (auto sync) |
 
 ---
@@ -657,7 +660,7 @@ Example prompts:
 | Channel | Status | What's needed |
 |---|---|---|
 | **Slack** | In progress | Slack app in a workspace below the app limit, then the steps in section 10 |
-| **Own "Ellie" avatar image** | Parked | Paid LiveAvatar plan + custom avatar slot, then swap `LIVEAVATAR_AVATAR_ID` (section 9) |
+| **Avatar for the CDA demo** | Optional | Anam Explorer ($49/month): no watermark, 10-minute calls, 250 minutes (section 9) |
 | **WhatsApp** | Parked | Meta restricted the WhatsApp Business account; needs an appeal and an own brand name. Live calls also need a 2,000/day messaging limit |
 | **Phone number** | Parked | No real phone number; the SIP import of a mobile number was removed (mobile SIMs can't route to SIP) |
 | **Copilot mode** | Parked | Draft-only mode (e.g. Freshdesk Shadow Mode, or a second agent) |
@@ -671,7 +674,7 @@ ElevenLabs does not sell phone numbers. It connects numbers from **Twilio**, any
 |---|---|
 | Phone company account | **Twilio** (paste Account SID + Auth Token or an API key; ElevenLabs configures the number automatically) **or** a SIP provider (SIP address, TCP/TLS transport, username + password) |
 | A number that can receive calls | Must be **bought** in that account (a Twilio "verified caller ID" only allows outbound calls). UK numbers usually need an ID/address check. Small monthly fee + per-minute fee |
-| ElevenLabs | **Agents → Phone Numbers → Import** → assign Ellie. Creator plan is enough. **No audio change needed**: phone audio is handled separately from the agent's PCM 24k setting |
+| ElevenLabs | **Agents → Phone Numbers → Import** → assign Ellie. Creator plan is enough. **No audio change needed**: phone audio is handled separately from the agent's audio format settings |
 | Protection against credit drain | Anyone can call a public number: set a **max call duration** (e.g. 5 min), a **daily call limit** and a **concurrency limit** |
 | Prompt tweaks | Already: 1–3 short sentences on phone. Add: read phone numbers slowly, no web links (offer email instead), say early that it's an AI and the call may be recorded |
 | Optional | **Transfer to number** tool (hand the call to a human, e.g. CDA customer care); **outbound "Ellie calls you"** with your own mobile as Twilio verified caller ID (no bought number, Twilio per-minute charges) |
@@ -708,7 +711,7 @@ enough for a demo but not for real traffic.
 | Instagram DMs don't arrive | Meta app must be **Published** (needs a privacy policy URL) |
 | Freshdesk replies twice | Freshdesk's own AI agent (Freddy) is on → keep it off |
 | Voice widget test error "draft_from_user_id" | Use the **Inline** test mode or refresh the page |
-| Avatar shows "Something went wrong. Please try again later." | The real reason is in the browser console (F12 → Console → "Session start failed"). Seen: `max_session_duration (180s) exceeds the maximum allowed (120s)` → set `LIVEAVATAR_MAX_SESSION_SECONDS=120` and redeploy |
-| Our HeyGen "Ellie" avatar isn't in LiveAvatar | HeyGen app avatars don't carry over → recreate it as an image avatar in LiveAvatar (paid) |
+| Avatar call fails to start | The real reason is in the browser console (F12 → Console) and the Vercel function logs. Check the `ANAM_*` variables, that the agent's input format is PCM 16000 Hz, and the Anam plan's call length (old LiveAvatar lesson: `max_session_duration (180s) exceeds the maximum allowed (120s)`) |
+| Our HeyGen "Ellie" avatar can't answer live | HeyGen app avatars only make recorded videos → recreate the face from the same picture on a live platform (done with Anam, free) |
 | Slack: "… has reached its app limit" | Free Slack workspaces allow 10 apps → use another workspace or remove an unused app |
 | Slack bot answers twice | The Slack app subscribes to both `app_mention` and `message.channels`/`message.groups` → keep one mode |

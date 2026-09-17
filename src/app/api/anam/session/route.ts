@@ -1,0 +1,47 @@
+import { elevenLabsGet } from "@/lib/elevenlabs";
+import { hasValidSession } from "@/lib/session";
+
+const DEFAULT_MAX_SESSION_SECONDS = 180;
+
+// Creates a short-lived Anam session token for Ellie's face. Anam's engine joins the ElevenLabs agent
+// through the signed URL, so Ellie keeps her prompt, voice and knowledge. Both API keys stay on the server.
+export async function POST() {
+  if (!(await hasValidSession())) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const apiKey = process.env.ANAM_API_KEY;
+  const avatarId = process.env.ANAM_AVATAR_ID;
+  const agentId = process.env.ELEVENLABS_AGENT_ID;
+  if (!apiKey || !avatarId || !agentId) {
+    return Response.json({ error: "The avatar is not configured" }, { status: 503 });
+  }
+  const maxSeconds = Number(process.env.ANAM_MAX_SESSION_SECONDS) || DEFAULT_MAX_SESSION_SECONDS;
+
+  try {
+    const { signed_url } = await elevenLabsGet<{ signed_url: string }>("/conversation/get-signed-url");
+    const response = await fetch("https://api.anam.ai/v1/auth/session-token", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        personaConfig: {
+          avatarId,
+          avatarModel: "cara-4",
+          maxSessionLengthSeconds: maxSeconds,
+          directorNotes: { presetStyle: "warm", expressivity: 0.5 },
+        },
+        environment: { elevenLabsAgentSettings: { signedUrl: signed_url, agentId } },
+      }),
+      cache: "no-store",
+    });
+    const body = (await response.json().catch(() => ({}))) as { sessionToken?: string; message?: string };
+    if (!response.ok || !body.sessionToken) {
+      console.error("Anam session token failed", response.status, body.message);
+      return Response.json({ error: "Could not start the avatar" }, { status: 502 });
+    }
+    return Response.json({ sessionToken: body.sessionToken, maxSeconds });
+  } catch (error) {
+    console.error(error);
+    return Response.json({ error: "Could not start the avatar" }, { status: 502 });
+  }
+}

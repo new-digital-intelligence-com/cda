@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anam-ai/js-sdk": "^4.27.0",
     "@elevenlabs/react": "^1.15.2",
     "next": "16.3.5",
     "react": "19.2.8",
