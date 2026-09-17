@@ -1,15 +1,10 @@
 import { hasValidToolSecret } from "@/lib/agentAuth";
-import {
-  customerStoreConfigured,
-  linkChannel,
-  normaliseEmail,
-  profileFor,
-  rememberConversation,
-  resolveIdentity,
-} from "@/lib/customers";
+import { customerStoreConfigured, redeemLinkCode, rememberConversation, resolveIdentity } from "@/lib/customers";
 
-// Tool `customer_link`: called once, after someone gives their email address. This is the moment
-// two channels become one person, so the reply already contains what they told us elsewhere.
+// Tool `customer_link`: the customer signed in on the website, got a short code, and sent it from
+// this channel. Redeeming it ties this channel to their account, so their history follows them.
+//
+// Ellie never asks anyone for an email address; this code is the only way a person links a channel.
 export async function POST(request: Request) {
   if (!(await hasValidToolSecret(request))) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -23,20 +18,19 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
-    const email = normaliseEmail(body.email);
-    if (!email) return Response.json({ ok: false, reason: "invalid_email" });
+    const code = typeof body.code === "string" ? body.code : "";
+    if (!code.trim()) return Response.json({ ok: false, reason: "no_code" });
 
     const identity = await resolveIdentity(body);
-    if (!identity) return Response.json({ ok: false, reason: "no_channel_key" });
+    if (!identity) return Response.json({ ok: false, reason: "unknown_channel" });
 
-    const given = typeof body.name === "string" && body.name.trim() ? body.name.trim().slice(0, 80) : undefined;
-    const name = given ?? identity.name;
-    const customer = await linkChannel(identity, email, name);
+    const result = await redeemLinkCode(code, identity);
+    if (!result.ok) return Response.json(result);
 
     const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : "";
-    await rememberConversation(conversationId, customer, identity.channel);
+    await rememberConversation(conversationId, result.customer.id, identity.channel);
 
-    return Response.json({ ok: true, ...(await profileFor(customer)) });
+    return Response.json({ ok: true, ...result.profile });
   } catch (error) {
     console.error("customer-link failed", error);
     return Response.json({ ok: false, reason: "unavailable" });

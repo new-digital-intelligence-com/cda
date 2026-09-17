@@ -1,4 +1,5 @@
 import AssistantApp from "@/components/AssistantApp";
+import { AccountPanel } from "@/components/AccountPanel";
 import { ChannelLinks } from "@/components/ChannelLinks";
 
 const helpTopics = [
@@ -62,6 +63,7 @@ export default function Home() {
             </ul>
           </section>
           <ChannelLinks />
+          <AccountPanel />
           <section className="rounded-xl border-l-4 border-cda-red bg-white p-5 text-sm text-cda-text shadow-sm">
             <p className="font-semibold text-cda-dark">Smell gas?</p>
             <p className="mt-1">

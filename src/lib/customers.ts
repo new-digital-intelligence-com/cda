@@ -1,17 +1,23 @@
-// Customer memory shared by every channel. Tables live in Supabase (see supabase/schema.sql)
-// and are reached over its REST API, so no extra npm package is needed.
+// Customer memory shared by every channel. Tables live in Supabase (see supabase/schema.sql) and
+// are reached over its REST API, so no extra npm package is needed.
 //
-// The email address is the bridge: each channel key (Telegram chat id, Instagram sender id,
-// website cookie, ...) points at one customer row, and that row is found by email.
+// A customer is a person. Every way of reaching them - a Telegram chat, an email address, an
+// Instagram sender id, a website cookie - is a row in customer_channels, so one person can have
+// several of the same kind with no special case.
+//
+// Ellie never asks anyone to identify themselves. A channel becomes linked either automatically
+// (its id is inside the conversation id) or because the person signed in on the website and sent
+// the short code from that channel.
 
 export const CHANNELS = ["telegram", "instagram", "email", "website", "slack"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
-export type Customer = { id: string; email: string; name: string | null };
-export type Identity = { channel: Channel; key: string };
+export type Customer = { id: string; name: string | null };
+export type Identity = { channel: Channel; key: string; name?: string };
+export type LinkedChannel = { channel: Channel; channel_key: string; verified: boolean };
 
-/** What the agent is told about a customer. Deliberately no email, address or order details. */
-export type Profile = { name: string | null; channels: Channel[]; recent: string[] };
+/** What the agent is told. Deliberately no addresses, order numbers or other personal details. */
+export type Profile = { name: string | null; channels: Channel[]; verified: boolean; recent: string[] };
 
 function credentials() {
   const url = process.env.SUPABASE_URL;
@@ -28,9 +34,9 @@ export function customerStoreConfigured(): boolean {
 
 async function rest<T>(path: string, init: RequestInit & { prefer?: string } = {}): Promise<T> {
   const { url, key } = credentials();
-  const { prefer, ...rest } = init;
+  const { prefer, ...options } = init;
   const response = await fetch(`${url}/rest/v1/${path}`, {
-    ...rest,
+    ...options,
     headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,
@@ -57,52 +63,21 @@ export function normaliseEmail(input: unknown): string | null {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) ? email : null;
 }
 
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
+// --- working out who is speaking -------------------------------------------------------------
 
 /**
- * The agent sends every identifier it might have; only the current channel's one is filled in,
- * because dynamic variables like {{integration__telegram_chat_id}} are empty on other channels.
- */
-export function identityFrom(body: Record<string, unknown>): Identity | null {
-  const explicit = text(body.channel);
-  const explicitKey = text(body.channel_key);
-  if (explicit && explicitKey && (CHANNELS as readonly string[]).includes(explicit)) {
-    return { channel: explicit as Channel, key: explicitKey };
-  }
-
-  const candidates: Identity[] = [
-    { channel: "telegram", key: text(body.telegram_chat_id) },
-    { channel: "instagram", key: text(body.instagram_id) },
-    { channel: "website", key: text(body.website_id) },
-    { channel: "slack", key: text(body.slack_user_id) },
-    // On email the address itself is the key, so that channel never needs a question.
-    { channel: "email", key: normaliseEmail(body.email_address) ?? "" },
-  ];
-  return candidates.find((candidate) => candidate.key !== "") ?? null;
-}
-
-/**
- * Freshdesk hands the agent no dynamic variables and strips the sender's address from the text,
- * but the conversation id ends with the ticket number (`..._fd_8`), and the ticket knows who wrote
- * it. That format is not documented, so a miss simply means "not recognised" and nothing breaks.
- */
-const FRESHDESK_TICKET = /_fd_(\d+)$/;
-
-/**
- * The Telegram chat id is in the conversation id too (`..._tg_6486763839`). We read it from there
- * rather than from `integration__telegram_chat_id`: giving that variable a placeholder stopped the
- * Telegram trigger creating conversations at all, the same way `system__` variables cannot be
- * overridden. `system__conversation_id` always exists and needs no placeholder.
+ * The channel's own id is inside the conversation id, and system__conversation_id is the only
+ * dynamic variable that exists on every channel. Binding a tool parameter to a channel-specific
+ * variable (integration__telegram_chat_id, or our own website_id) makes the conversation fail on
+ * every other channel with "Missing required dynamic variables", so we do not use them.
  */
 const TELEGRAM_CHAT = /_tg_(\d+)$/;
+const FRESHDESK_TICKET = /_fd_(\d+)$/;
 
-async function freshdeskRequester(conversationId: string): Promise<{ email: string; name?: string } | null> {
-  const ticket = conversationId.match(FRESHDESK_TICKET)?.[1];
+async function freshdeskRequester(ticket: string): Promise<{ email: string; name?: string } | null> {
   const apiKey = process.env.FRESHDESK_API_KEY;
   const subdomain = process.env.FRESHDESK_SUBDOMAIN;
-  if (!ticket || !apiKey || !subdomain) return null;
+  if (!apiKey || !subdomain) return null;
 
   try {
     // Freshdesk signs in with the API key as the username and "X" as the password.
@@ -112,82 +87,199 @@ async function freshdeskRequester(conversationId: string): Promise<{ email: stri
       cache: "no-store",
     });
     if (!response.ok) return null;
-    const ticketBody = (await response.json()) as { requester?: { email?: string; name?: string } };
-    const email = normaliseEmail(ticketBody.requester?.email);
-    return email ? { email, name: ticketBody.requester?.name?.trim() || undefined } : null;
+    const body = (await response.json()) as { requester?: { email?: string; name?: string } };
+    const email = normaliseEmail(body.requester?.email);
+    return email ? { email, name: body.requester?.name?.trim() || undefined } : null;
   } catch (error) {
     console.error("Freshdesk requester lookup failed", error);
     return null;
   }
 }
 
-/** Who this turn is from: straight from a dynamic variable, or looked up for a Freshdesk ticket. */
-export async function resolveIdentity(
-  body: Record<string, unknown>,
-): Promise<(Identity & { name?: string }) | null> {
-  const direct = identityFrom(body);
-  if (direct) return direct;
+/** Who this turn is from, worked out from the conversation id alone. */
+export async function resolveIdentity(body: Record<string, unknown>): Promise<Identity | null> {
+  const explicitChannel = typeof body.channel === "string" ? body.channel : "";
+  const explicitKey = typeof body.channel_key === "string" ? body.channel_key.trim() : "";
+  if (explicitKey && (CHANNELS as readonly string[]).includes(explicitChannel)) {
+    return { channel: explicitChannel as Channel, key: explicitKey };
+  }
 
   const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : "";
 
   const telegram = conversationId.match(TELEGRAM_CHAT)?.[1];
   if (telegram) return { channel: "telegram", key: telegram };
 
-  const requester = await freshdeskRequester(conversationId);
-  return requester ? { channel: "email", key: requester.email, name: requester.name } : null;
+  const ticket = conversationId.match(FRESHDESK_TICKET)?.[1];
+  if (ticket) {
+    const requester = await freshdeskRequester(ticket);
+    if (requester) return { channel: "email", key: requester.email, name: requester.name };
+  }
+
+  return null;
 }
 
-export async function findByChannel({ channel, key }: Identity): Promise<Customer | null> {
-  const rows = await rest<{ customers: Customer | Customer[] | null }[]>(
-    `customer_channels?channel=eq.${q(channel)}&channel_key=eq.${q(key)}&select=customers(id,email,name)&limit=1`,
+// --- customers and their channels ------------------------------------------------------------
+
+export async function findByChannel({ channel, key }: Identity): Promise<{ customer: Customer; verified: boolean } | null> {
+  const rows = await rest<{ verified: boolean; customers: Customer | Customer[] | null }[]>(
+    `customer_channels?channel=eq.${q(channel)}&channel_key=eq.${q(key)}&select=verified,customers(id,name)&limit=1`,
   );
-  // PostgREST returns an embedded row as an object, but older versions wrap it in an array.
-  const embedded = rows[0]?.customers;
-  return (Array.isArray(embedded) ? embedded[0] : embedded) ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  // PostgREST returns an embedded row as an object; older versions wrap it in an array.
+  const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+  return customer ? { customer, verified: row.verified } : null;
 }
 
-export async function findByEmail(email: string): Promise<Customer | null> {
-  const rows = await rest<Customer[]>(`customers?email=eq.${q(email)}&select=id,email,name&limit=1`);
-  return rows[0] ?? null;
-}
-
-/** Creates the customer if the email is new, then points this channel key at them. */
-export async function linkChannel(identity: Identity, email: string, name?: string): Promise<Customer> {
-  // Sending `name` only when we have one keeps an earlier name instead of overwriting it with null.
-  const [customer] = await rest<Customer[]>("customers?on_conflict=email&select=id,email,name", {
+export async function createCustomer(name?: string, authUserId?: string): Promise<Customer> {
+  const [customer] = await rest<Customer[]>("customers?select=id,name", {
     method: "POST",
-    prefer: "resolution=merge-duplicates,return=representation",
-    body: JSON.stringify(name ? { email, name } : { email }),
-  });
-  await rest("customer_channels?on_conflict=channel,channel_key", {
-    method: "POST",
-    prefer: "resolution=merge-duplicates,return=minimal",
-    body: JSON.stringify({ channel: identity.channel, channel_key: identity.key, customer_id: customer.id }),
+    prefer: "return=representation",
+    body: JSON.stringify({ name: name ?? null, auth_user_id: authUserId ?? null }),
   });
   return customer;
 }
 
+export async function attachChannel(customerId: string, { channel, key }: Identity, verified: boolean) {
+  await rest("customer_channels?on_conflict=channel,channel_key", {
+    method: "POST",
+    prefer: "resolution=merge-duplicates,return=minimal",
+    body: JSON.stringify({ channel, channel_key: key, customer_id: customerId, verified }),
+  });
+}
+
+export async function listChannels(customerId: string): Promise<LinkedChannel[]> {
+  return rest<LinkedChannel[]>(
+    `customer_channels?customer_id=eq.${q(customerId)}&select=channel,channel_key,verified&order=created_at.asc`,
+  );
+}
+
+export async function removeChannel(customerId: string, channel: string, key: string) {
+  await rest(
+    `customer_channels?customer_id=eq.${q(customerId)}&channel=eq.${q(channel)}&channel_key=eq.${q(key)}`,
+    { method: "DELETE", prefer: "return=minimal" },
+  );
+}
+
 export async function profileFor(customer: Customer): Promise<Profile> {
   const [channels, notes] = await Promise.all([
-    rest<{ channel: Channel }[]>(`customer_channels?customer_id=eq.${q(customer.id)}&select=channel`),
+    listChannels(customer.id),
     rest<{ summary: string }[]>(
       `customer_notes?customer_id=eq.${q(customer.id)}&select=summary&order=created_at.desc&limit=3`,
     ),
   ]);
   return {
     name: customer.name,
-    channels: [...new Set(channels.map((row) => row.channel))],
+    channels: [...new Set(channels.map((row) => row.channel as Channel))],
+    verified: channels.some((row) => row.verified),
     recent: notes.map((note) => note.summary),
   };
 }
 
+// --- the account on the website --------------------------------------------------------------
+
+/**
+ * The customer behind a signed-in website account. If that email was already seen on the email
+ * channel, the existing record is adopted so nothing they told us before is lost.
+ */
+export async function customerForAccount(authUserId: string, email: string, name?: string): Promise<Customer> {
+  const byAuth = await rest<Customer[]>(
+    `customers?auth_user_id=eq.${q(authUserId)}&select=id,name&limit=1`,
+  );
+  if (byAuth[0]) return byAuth[0];
+
+  const existing = await findByChannel({ channel: "email", key: email });
+  const customer = existing?.customer ?? (await createCustomer(name));
+
+  await rest(`customers?id=eq.${q(customer.id)}`, {
+    method: "PATCH",
+    prefer: "return=minimal",
+    body: JSON.stringify(name ? { auth_user_id: authUserId, name } : { auth_user_id: authUserId }),
+  });
+  // Signing in with that address proves it, so the email channel counts as verified.
+  await attachChannel(customer.id, { channel: "email", key: email }, true);
+  return { id: customer.id, name: name ?? customer.name };
+}
+
+// --- link codes ------------------------------------------------------------------------------
+
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0 or 1 to read out loud
+const CODE_TTL_MINUTES = 30;
+
+export async function createLinkCode(customerId: string): Promise<{ code: string; expiresAt: string }> {
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  const code = `CDA-${Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("")}`;
+  const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60_000).toISOString();
+  await rest("link_codes", {
+    method: "POST",
+    prefer: "return=minimal",
+    body: JSON.stringify({ code, customer_id: customerId, expires_at: expiresAt }),
+  });
+  return { code, expiresAt };
+}
+
+export type RedeemResult =
+  | { ok: true; customer: Customer; profile: Profile }
+  | { ok: false; reason: "unknown_code" | "expired" | "already_used" };
+
+/** Turns a code sent from a channel into a verified link for that channel. */
+export async function redeemLinkCode(rawCode: string, identity: Identity): Promise<RedeemResult> {
+  const code = rawCode.trim().toUpperCase().replace(/\s+/g, "");
+  const rows = await rest<{ code: string; customer_id: string; expires_at: string; used_at: string | null }[]>(
+    `link_codes?code=eq.${q(code)}&select=code,customer_id,expires_at,used_at&limit=1`,
+  );
+  const row = rows[0];
+  if (!row) return { ok: false, reason: "unknown_code" };
+  if (row.used_at) return { ok: false, reason: "already_used" };
+  if (new Date(row.expires_at).getTime() < Date.now()) return { ok: false, reason: "expired" };
+
+  // That channel may already belong to an anonymous record created while they were chatting.
+  // Move its notes over and drop it, so nothing they told us before the link is lost.
+  const existing = await findByChannel(identity);
+  if (existing && existing.customer.id !== row.customer_id) {
+    const owners = await rest<{ id: string; auth_user_id: string | null }[]>(
+      `customers?id=eq.${q(existing.customer.id)}&select=id,auth_user_id&limit=1`,
+    );
+    if (owners[0] && !owners[0].auth_user_id) {
+      await rest(`customer_notes?customer_id=eq.${q(existing.customer.id)}`, {
+        method: "PATCH",
+        prefer: "return=minimal",
+        body: JSON.stringify({ customer_id: row.customer_id }),
+      });
+      await rest(`customer_conversations?customer_id=eq.${q(existing.customer.id)}`, {
+        method: "PATCH",
+        prefer: "return=minimal",
+        body: JSON.stringify({ customer_id: row.customer_id }),
+      });
+      await rest(`customers?id=eq.${q(existing.customer.id)}`, { method: "DELETE", prefer: "return=minimal" });
+    }
+  }
+
+  await attachChannel(row.customer_id, identity, true);
+  await rest(`link_codes?code=eq.${q(code)}`, {
+    method: "PATCH",
+    prefer: "return=minimal",
+    body: JSON.stringify({
+      used_at: new Date().toISOString(),
+      used_channel: identity.channel,
+      used_key: identity.key,
+    }),
+  });
+
+  const customers = await rest<Customer[]>(`customers?id=eq.${q(row.customer_id)}&select=id,name&limit=1`);
+  const customer = customers[0];
+  return { ok: true, customer, profile: await profileFor(customer) };
+}
+
+// --- the memory itself -------------------------------------------------------------------------
+
 /** Lets the post-call webhook file its note against the right customer. */
-export async function rememberConversation(conversationId: string, customer: Customer, channel: Channel) {
+export async function rememberConversation(conversationId: string, customerId: string, channel: Channel) {
   if (!conversationId) return;
   await rest("customer_conversations?on_conflict=conversation_id", {
     method: "POST",
     prefer: "resolution=merge-duplicates,return=minimal",
-    body: JSON.stringify({ conversation_id: conversationId, customer_id: customer.id, channel }),
+    body: JSON.stringify({ conversation_id: conversationId, customer_id: customerId, channel }),
   });
 }
 
