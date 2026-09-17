@@ -851,15 +851,30 @@ If it returns found = false:
 Never ask for the email twice in one conversation, and never ask for it just to say hello.
 ```
 
-### Setup order
+### What is already set up (17 Sep 2026)
 
-1. Add the Instagram dynamic variable to the Make scenario (below)
-2. Supabase project → run `supabase/schema.sql` → copy the project URL and **service role** key
-3. Add the four variables to `.env.local` **and** Vercel → Redeploy
-4. ElevenLabs → Workspace secrets → add the value of `AGENT_TOOL_SECRET`
-5. Create the two tools, set the dynamic variable placeholders, add the prompt block → **Publish**
-6. Add the post-call webhook and save its secret
-7. Test with fake customers: Telegram first, then Instagram with the same email
+All of this was done through the API and is **live**: the Main branch is at 100% of traffic and
+`draft_exists` is false, so there was no separate Publish step.
+
+| Thing | ID |
+|---|---|
+| Workspace secret `CDA_AGENT_TOOL_SECRET` | `DXmaQafUvJljsoKMs0nO` |
+| Tool `customer_lookup` | `tool_9201m2rhvc78e339hna52s5jfryf` |
+| Tool `customer_link` | `tool_0301m2rhvckwepns0q0dhn26xnvr` |
+| Post-call webhook | `5c8daa58c85c43feacc9c0b2e9599f77` |
+
+Also set on the agent: both tool IDs attached, the prompt block added, the post-call webhook linked
+through `workspace_overrides.webhooks.post_call_webhook_id`, and **empty placeholders** for
+`integration__telegram_chat_id`, `integration__slack_user_id`, `instagram_id` and `website_id`.
+Those placeholders matter: without them the tool call fails on the channels where a variable does
+not exist. Voice, LLM, RAG and all 31 knowledge documents were re-read afterwards and unchanged.
+
+Backup of the agent before the change: `agent-backup.json` (kept outside the repository).
+
+### The one step left
+
+**Instagram**: add the dynamic variable to the Make scenario, as shown below. Until that is done
+Instagram customers simply are not recognised, and every other channel works normally.
 
 ### How each channel is identified
 

@@ -114,15 +114,14 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
 
 ## 5. Open tasks (in order)
 
-0. **Cross-channel customer memory** – deployed and working; the agent side is not connected yet.
-   Full details in CHANNEL_SETUP.md §16. Done: Supabase project + schema, `.env.local`, Vercel
-   Production/Preview variables, the three routes live and tested at cda-nine-ebon.vercel.app.
-   - Add `"dynamic_variables": {"instagram_id": "<sender id>"}` to the Make scenario "IG – Instagram in"
-     (top level, next to `data`). Telegram, Slack, website and email already work — see §16
-   - Create the tools `customer_lookup` and `customer_link`, set empty-string placeholders for every
-     dynamic variable used, add the prompt block → Publish
-   - Create the post-call webhook, then put its signing secret in `ELEVENLABS_WEBHOOK_SECRET`
-     (`.env.local` **and** Vercel) → Redeploy. Until then the memory notes are not written
+0. **Cross-channel customer memory** – **live** on Telegram, email and the website. Details: CHANNEL_SETUP.md §16.
+   Done: Supabase project + schema, all env vars (local + Vercel), the three routes deployed and tested
+   against production, both agent tools created and attached, the prompt block added, the post-call
+   webhook created and linked. The agent API commits straight to Main, so no Publish step was needed.
+   - **Left to do:** add `"dynamic_variables": {"instagram_id": "<sender id>"}` to the Make scenario
+     "IG – Instagram in" (top level, next to `data`), or Instagram customers are not recognised
+   - **Left to do:** the user tests it — Telegram first, then the same email on another channel
+   - Weak spot: email identity relies on the undocumented `_fd_<ticket>` ending of the conversation id
    - Note: ElevenLabs' own `user_memory` setting is **off** on purpose — Telegram and email conversations
      all carry the workspace owner's `user_id`, so switching it on would merge every customer into one memory
 1. **Slack** – waiting for the user:
