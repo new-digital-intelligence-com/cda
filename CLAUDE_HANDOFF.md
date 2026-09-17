@@ -96,12 +96,14 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
 - `src/app/api/elevenlabs/*`: signed URL (chat) and conversation token (voice)
 - `src/app/api/anam/session/route.ts` + `src/components/AvatarPanel.tsx`: Anam avatar. The server gets an ElevenLabs signed URL and creates an Anam session token (`avatarModel: cara-4`, `maxSessionLengthSeconds`, `directorNotes` warm 0.5, `sessionOptions` 1152×768 or 768×1152, `environment.elevenLabsAgentSettings`). Anam Lab stores **no** ElevenLabs link; the "Olivia" persona in Lab is not used
 - `src/components/ChannelLinks.tsx`: Email (Gmail compose), Telegram and Instagram buttons (Instagram label shows @CDA_2026_Support_Bot but opens @samrasellimi)
-- `src/app/api/agent/*` + `src/lib/customers.ts` + `supabase/schema.sql`: **cross-channel customer memory**
-  (CHANNEL_SETUP.md §16). Email is the bridge between channels. These three routes are exempt from the
-  site password in `src/proxy.ts` and use a shared secret / HMAC instead (`src/lib/agentAuth.ts`).
-  Live on Vercel and tested against production. Supabase project and env vars (local + Vercel) are done,
-  and all five channels have a working identifier (email comes from the Freshdesk ticket).
-  Still to do: the two agent tools, the post-call webhook, the prompt block and the Make edit
+- **Cross-channel customer memory** (CHANNEL_SETUP.md §16), live and tested against production:
+  - `src/app/api/agent/*`: the two agent tools and the post-call webhook. Exempt from the site
+    password in `src/proxy.ts`, protected by a shared secret / HMAC instead (`src/lib/agentAuth.ts`)
+  - `src/lib/customers.ts` + `supabase/schema.sql`: one customer, many channel rows, link codes, notes
+  - `src/lib/account.ts` + `src/app/api/account/` + `src/components/AccountPanel.tsx`: customer
+    accounts on Supabase Auth, and the panel where a channel is linked with a code
+  - `src/lib/websiteSession.ts`: chat, voice and the avatar register their conversation server-side,
+    because a website-only dynamic variable would break every other channel
 - Vercel deploys `main` automatically; after changing env vars on Vercel, redeploy
 
 **Anam** (free plan: 30 min/month, 3-min calls, 1 custom avatar) – avatar Sofia, Cara 4, supports horizontal and vertical.
@@ -118,9 +120,10 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
    avatar). Details: CHANNEL_SETUP.md §16. Customers create an account on the site and link each
    channel by pasting a short code into it; Ellie never asks anyone to identify themselves.
    - **Never** bind a tool parameter to a channel-specific dynamic variable: it breaks every other
-     channel, and a placeholder on  took Telegram down completely
-   - Left: Instagram (blocked by Meta), Slack ( exists, not wired up)
-   - Weak spot: Telegram and email identity rely on the undocumented / conversation id endings
+     channel, and a placeholder on `integration__telegram_chat_id` took Telegram down completely
+   - Left: Instagram (blocked by Meta), Slack (`integration__slack_user_id` exists, not wired up)
+   - Weak spot: Telegram and email identity rely on the undocumented `_tg_` / `_fd_` endings of the
+     conversation id
 
 1. **Slack** – waiting for the user:
    - The "New Digital Intelligence" Slack workspace hit the free plan's 10-app limit → use a new demo workspace or remove an unused app.
