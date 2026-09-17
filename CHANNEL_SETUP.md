@@ -363,6 +363,8 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key — **server only, never in the browser** |
 | `AGENT_TOOL_SECRET` | Shared secret the agent's tools send in the `x-cda-agent-secret` header |
 | `ELEVENLABS_WEBHOOK_SECRET` | Signing secret of the post-call webhook (section 16) |
+| `FRESHDESK_API_KEY` | Freshdesk API key, used to find who wrote an email ticket (section 16) |
+| `FRESHDESK_SUBDOMAIN` | `newdigitalintelligence-help` |
 
 After changing a variable on Vercel → **Redeploy**.
 
@@ -632,7 +634,7 @@ Example prompts:
 |---|---|---|
 | ElevenLabs API key | Vercel env vars, `cda-web-app/.env.local` | Was shared in chat → rotate after the demo |
 | Telegram bot token | ElevenLabs Telegram connection | From @BotFather |
-| Freshdesk API key | ElevenLabs Freshdesk connection | |
+| Freshdesk API key | ElevenLabs Freshdesk connection, Vercel env vars, `.env.local` | Also used to find who wrote an email ticket (section 16) |
 | Google mailbox access | Freshdesk (Google OAuth) | |
 | Google Drive access | ElevenLabs Google Drive integration | Read-only, picked files only |
 | Custom Channel secrets (input/output) | ElevenLabs trigger; input secret in Make HTTP header | |
@@ -851,7 +853,7 @@ Never ask for the email twice in one conversation, and never ask for it just to 
 
 ### Setup order
 
-1. Confirm the Instagram and email identifiers (below)
+1. Add the Instagram dynamic variable to the Make scenario (below)
 2. Supabase project → run `supabase/schema.sql` → copy the project URL and **service role** key
 3. Add the four variables to `.env.local` **and** Vercel → Redeploy
 4. ElevenLabs → Workspace secrets → add the value of `AGENT_TOOL_SECRET`
@@ -859,17 +861,44 @@ Never ask for the email twice in one conversation, and never ask for it just to 
 6. Add the post-call webhook and save its secret
 7. Test with fake customers: Telegram first, then Instagram with the same email
 
-### Still to confirm
+### How each channel is identified
 
-| Channel | Identifier | Status |
+| Channel | Identifier | Where it comes from |
 |---|---|---|
-| Telegram | `integration__telegram_chat_id` | ✅ Confirmed in the docs |
-| Website / voice | `website_id` | ✅ Sent by the web app |
-| Instagram | Custom Channel `user_identifier` | ❓ Send one DM, then read the conversation over the API |
-| Email | Freshdesk requester address | ❓ Send one email, then read the conversation over the API |
+| Telegram | `integration__telegram_chat_id` | Provided by the integration (documented) |
+| Slack | `integration__slack_user_id` | Provided by the integration (documented) |
+| Website / voice | `website_id` | The web app sends it with the session (cookie `cda_visitor`) |
+| Instagram | `instagram_id` | **We** put it in the Make request — see below |
+| Email | the sender's address | Looked up from the Freshdesk ticket — see below |
 
-Both are a free check: send one normal message on the channel, then read
-`GET /v1/convai/conversations/{id}` and look at the dynamic variables that arrived.
+**Instagram.** The Custom Channel payload takes a **top-level** `dynamic_variables` object, so the
+name is ours to choose. Add this to the HTTP body in the Make scenario **"IG – Instagram in"**,
+next to `data` and `user_message_id`:
+
+```json
+"dynamic_variables": { "instagram_id": "<sender id>" }
+```
+
+**Email.** Freshdesk provides no dynamic variables, and ElevenLabs strips the sender's address from
+the text the agent sees — a real email arrived as just `"I need a support"`. But the conversation id
+ends with the ticket number (`conv_52_0dcad3387484c5fa_fd_8` → ticket 8), and `system__conversation_id`
+is available everywhere. So `customer_lookup` reads the ticket number, asks Freshdesk
+`GET /api/v2/tickets/{id}?include=requester`, and uses the requester's address as the key. It also
+gets their name, so Ellie can greet them properly on the very first email — no question asked.
+
+> That `_fd_<number>` format is **not documented**. If ElevenLabs changes it, email quietly stops
+> being recognised and every other channel carries on; the code returns "not found" rather than
+> failing. Tested 17 Sep 2026 against ticket 8.
+
+### Verified by test
+
+Run against the live site and the real Supabase project on 17 September 2026:
+
+- wrong secret → 401; unsigned post-call webhook → 401
+- link on Telegram, then link on Instagram with the same email → one customer, both channels
+- email with **only** a conversation id → recognised as "Helmi Lakhder" with no question
+- unknown ticket number and a non-Freshdesk id → "not found", no error
+- post-call webhook with a valid signature → note saved and visible on the other channel
 
 ### Privacy
 

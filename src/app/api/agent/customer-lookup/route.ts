@@ -2,10 +2,10 @@ import { hasValidToolSecret } from "@/lib/agentAuth";
 import {
   customerStoreConfigured,
   findByChannel,
-  identityFrom,
   linkChannel,
   profileFor,
   rememberConversation,
+  resolveIdentity,
 } from "@/lib/customers";
 
 // Tool `customer_lookup`: Ellie calls this silently at the start of every conversation.
@@ -25,14 +25,14 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    const identity = identityFrom(body);
+    const identity = await resolveIdentity(body);
     if (!identity) return Response.json({ found: false });
 
     // On email the address itself is the key, so that channel identifies people with no question
     // at all — and creating the record here lets later channels match on the same address.
     const customer =
       (await findByChannel(identity)) ??
-      (identity.channel === "email" ? await linkChannel(identity, identity.key) : null);
+      (identity.channel === "email" ? await linkChannel(identity, identity.key, identity.name) : null);
     if (!customer) return Response.json({ found: false });
 
     const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : "";

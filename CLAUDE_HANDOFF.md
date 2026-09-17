@@ -63,6 +63,7 @@ Create `.env.local` (git-ignored). Copy the values from **Vercel → project `cd
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server only) |
 | `AGENT_TOOL_SECRET` | Secret the agent's tools send in `x-cda-agent-secret` |
 | `ELEVENLABS_WEBHOOK_SECRET` | Signing secret of the post-call webhook |
+| `FRESHDESK_API_KEY` / `FRESHDESK_SUBDOMAIN` | Used to find who wrote an email ticket |
 
 ```bash
 npm run dev      # http://localhost:3000
@@ -98,8 +99,9 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
 - `src/app/api/agent/*` + `src/lib/customers.ts` + `supabase/schema.sql`: **cross-channel customer memory**
   (CHANNEL_SETUP.md §16). Email is the bridge between channels. These three routes are exempt from the
   site password in `src/proxy.ts` and use a shared secret / HMAC instead (`src/lib/agentAuth.ts`).
-  Live on Vercel and tested against production. Supabase project and env vars (local + Vercel) are done.
-  Still to do: the two agent tools, the post-call webhook, and the prompt block
+  Live on Vercel and tested against production. Supabase project and env vars (local + Vercel) are done,
+  and all five channels have a working identifier (email comes from the Freshdesk ticket).
+  Still to do: the two agent tools, the post-call webhook, the prompt block and the Make edit
 - Vercel deploys `main` automatically; after changing env vars on Vercel, redeploy
 
 **Anam** (free plan: 30 min/month, 3-min calls, 1 custom avatar) – avatar Sofia, Cara 4, supports horizontal and vertical.
@@ -115,8 +117,8 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
 0. **Cross-channel customer memory** – deployed and working; the agent side is not connected yet.
    Full details in CHANNEL_SETUP.md §16. Done: Supabase project + schema, `.env.local`, Vercel
    Production/Preview variables, the three routes live and tested at cda-nine-ebon.vercel.app.
-   - Confirm which identifier Instagram (Custom Channel) and Freshdesk expose as dynamic variables:
-     the user sends one Instagram DM and one email, then read `GET /v1/convai/conversations/{id}` (free)
+   - Add `"dynamic_variables": {"instagram_id": "<sender id>"}` to the Make scenario "IG – Instagram in"
+     (top level, next to `data`). Telegram, Slack, website and email already work — see §16
    - Create the tools `customer_lookup` and `customer_link`, set empty-string placeholders for every
      dynamic variable used, add the prompt block → Publish
    - Create the post-call webhook, then put its signing secret in `ELEVENLABS_WEBHOOK_SECRET`

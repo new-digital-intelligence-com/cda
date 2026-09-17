@@ -1,11 +1,11 @@
 import { hasValidToolSecret } from "@/lib/agentAuth";
 import {
   customerStoreConfigured,
-  identityFrom,
   linkChannel,
   normaliseEmail,
   profileFor,
   rememberConversation,
+  resolveIdentity,
 } from "@/lib/customers";
 
 // Tool `customer_link`: called once, after someone gives their email address. This is the moment
@@ -26,10 +26,11 @@ export async function POST(request: Request) {
     const email = normaliseEmail(body.email);
     if (!email) return Response.json({ ok: false, reason: "invalid_email" });
 
-    const identity = identityFrom(body);
+    const identity = await resolveIdentity(body);
     if (!identity) return Response.json({ ok: false, reason: "no_channel_key" });
 
-    const name = typeof body.name === "string" && body.name.trim() ? body.name.trim().slice(0, 80) : undefined;
+    const given = typeof body.name === "string" && body.name.trim() ? body.name.trim().slice(0, 80) : undefined;
+    const name = given ?? identity.name;
     const customer = await linkChannel(identity, email, name);
 
     const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : "";

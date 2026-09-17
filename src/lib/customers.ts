@@ -83,6 +83,48 @@ export function identityFrom(body: Record<string, unknown>): Identity | null {
   return candidates.find((candidate) => candidate.key !== "") ?? null;
 }
 
+/**
+ * Freshdesk hands the agent no dynamic variables and strips the sender's address from the text,
+ * but the conversation id ends with the ticket number (`..._fd_8`), and the ticket knows who wrote
+ * it. That format is not documented, so a miss simply means "not recognised" and nothing breaks.
+ */
+const FRESHDESK_TICKET = /_fd_(\d+)$/;
+
+async function freshdeskRequester(conversationId: string): Promise<{ email: string; name?: string } | null> {
+  const ticket = conversationId.match(FRESHDESK_TICKET)?.[1];
+  const apiKey = process.env.FRESHDESK_API_KEY;
+  const subdomain = process.env.FRESHDESK_SUBDOMAIN;
+  if (!ticket || !apiKey || !subdomain) return null;
+
+  try {
+    // Freshdesk signs in with the API key as the username and "X" as the password.
+    const response = await fetch(`https://${subdomain}.freshdesk.com/api/v2/tickets/${ticket}?include=requester`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${apiKey}:X`).toString("base64")}` },
+      signal: AbortSignal.timeout(5000),
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const ticketBody = (await response.json()) as { requester?: { email?: string; name?: string } };
+    const email = normaliseEmail(ticketBody.requester?.email);
+    return email ? { email, name: ticketBody.requester?.name?.trim() || undefined } : null;
+  } catch (error) {
+    console.error("Freshdesk requester lookup failed", error);
+    return null;
+  }
+}
+
+/** Who this turn is from: straight from a dynamic variable, or looked up for a Freshdesk ticket. */
+export async function resolveIdentity(
+  body: Record<string, unknown>,
+): Promise<(Identity & { name?: string }) | null> {
+  const direct = identityFrom(body);
+  if (direct) return direct;
+
+  const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : "";
+  const requester = await freshdeskRequester(conversationId);
+  return requester ? { channel: "email", key: requester.email, name: requester.name } : null;
+}
+
 export async function findByChannel({ channel, key }: Identity): Promise<Customer | null> {
   const rows = await rest<{ customers: Customer | Customer[] | null }[]>(
     `customer_channels?channel=eq.${q(channel)}&channel_key=eq.${q(key)}&select=customers(id,email,name)&limit=1`,
