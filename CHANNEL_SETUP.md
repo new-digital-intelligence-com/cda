@@ -315,6 +315,7 @@ If used on a real site, add the domain in **Security → Allowlist**.
 - **File upload**: images (PNG/JPG/WEBP/GIF) and PDFs, max 3 per message, 10 MB each (`uploadFile` + `sendMultimodalMessage`)
 - **Voice**: real-time WebRTC, animated orb, mute, end call, live transcript
 - **Avatar**: HeyGen LiveAvatar video call in an iframe, max 2 minutes per call (see section 9)
+- **Other channels card**: buttons that open Email (Gmail compose to the support address), the Telegram bot and an Instagram DM (`src/components/ChannelLinks.tsx`)
 - **Password lock**: every page and API route requires `SITE_PASSWORD` (checked in `src/proxy.ts` and again in the API routes); site stays locked if the variable is missing
 
 ### Important files
