@@ -1,5 +1,6 @@
 import type { AvatarOrientation } from "@/components/types";
 import { elevenLabsGet } from "@/lib/elevenlabs";
+import { registerWebsiteConversation } from "@/lib/websiteSession";
 import { hasValidSession } from "@/lib/session";
 
 const DEFAULT_MAX_SESSION_SECONDS = 180;
@@ -28,7 +29,14 @@ export async function POST(request: Request) {
   const maxSeconds = Number(process.env.ANAM_MAX_SESSION_SECONDS) || DEFAULT_MAX_SESSION_SECONDS;
 
   try {
-    const { signed_url } = await elevenLabsGet<{ signed_url: string }>("/conversation/get-signed-url");
+    const { signed_url, conversation_id } = await elevenLabsGet<{
+      signed_url: string;
+      conversation_id?: string;
+    }>("/conversation/get-signed-url", { include_conversation_id: "true" });
+
+    // Tie this avatar call to the visitor, so Ellie recognises them here too.
+    await registerWebsiteConversation(conversation_id);
+
     const response = await fetch("https://api.anam.ai/v1/auth/session-token", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },

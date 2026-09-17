@@ -10,9 +10,10 @@ function credentials() {
 }
 
 /** Calls an ElevenLabs endpoint with the server-side API key and returns its JSON body. */
-export async function elevenLabsGet<T>(path: string): Promise<T> {
+export async function elevenLabsGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const { apiKey, agentId } = credentials();
-  const response = await fetch(`${API_BASE}${path}?agent_id=${encodeURIComponent(agentId)}`, {
+  const query = new URLSearchParams({ agent_id: agentId, ...params });
+  const response = await fetch(`${API_BASE}${path}?${query}`, {
     headers: { "xi-api-key": apiKey },
     cache: "no-store",
   });

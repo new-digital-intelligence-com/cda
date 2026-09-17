@@ -1,13 +1,18 @@
 import { hasValidToolSecret } from "@/lib/agentAuth";
 import {
-  attachChannel,
-  createCustomer,
+  customerForChannel,
+  customerForConversation,
   customerStoreConfigured,
-  findByChannel,
   profileFor,
   rememberConversation,
   resolveIdentity,
+  type Profile,
 } from "@/lib/customers";
+
+/** Only say "found" when there is something worth saying, not merely that a row exists. */
+function answer(profile: Profile) {
+  return Response.json({ found: Boolean(profile.name) || profile.recent.length > 0, ...profile });
+}
 
 // Tool `customer_lookup`: Ellie calls this silently at the start of every conversation.
 //
@@ -25,27 +30,22 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : "";
+
+    // Website chat, voice and the avatar registered themselves when their session was created.
+    const registered = await customerForConversation(conversationId);
+    if (registered) return answer(await profileFor(registered));
+
     const identity = await resolveIdentity(body);
     if (!identity) return Response.json({ found: false });
 
-    const known = await findByChannel(identity);
-    let customer = known?.customer;
-
-    if (!customer) {
-      // First time on this channel. Remember it anyway so the next conversation on the same
-      // channel picks up where this one left off. An email address arrives from the Freshdesk
-      // ticket, which proves it; a Telegram chat id proves nothing until they link it.
-      customer = await createCustomer(identity.name);
-      await attachChannel(customer.id, identity, identity.channel === "email");
-    }
-
-    const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : "";
+    // First time on this channel: remember it anyway, so the next conversation on the same channel
+    // picks up where this one left off. An email address comes from the Freshdesk ticket, which
+    // proves it; a Telegram chat id proves nothing until they link it with a code.
+    const customer = await customerForChannel(identity, identity.channel === "email");
     await rememberConversation(conversationId, customer.id, identity.channel);
 
-    const profile = await profileFor(customer);
-    // "found" means we have something worth saying, not merely that a row exists.
-    const found = Boolean(profile.name) || profile.recent.length > 0;
-    return Response.json({ found, ...profile });
+    return answer(await profileFor(customer));
   } catch (error) {
     console.error("customer-lookup failed", error);
     return Response.json({ found: false });

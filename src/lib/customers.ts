@@ -161,6 +161,29 @@ export async function removeChannel(customerId: string, channel: string, key: st
   );
 }
 
+/** Finds the customer this channel belongs to, creating an anonymous record the first time. */
+export async function customerForChannel(identity: Identity, verified: boolean): Promise<Customer> {
+  const known = await findByChannel(identity);
+  if (known) return known.customer;
+  const customer = await createCustomer(identity.name);
+  await attachChannel(customer.id, identity, verified);
+  return customer;
+}
+
+/**
+ * Website chat, voice and the avatar have no channel id inside the conversation id, and binding a
+ * website-only dynamic variable would break every other channel. Instead the web app registers the
+ * conversation as soon as it starts, and the agent's lookup finds it here.
+ */
+export async function customerForConversation(conversationId: string): Promise<Customer | null> {
+  if (!conversationId) return null;
+  const rows = await rest<{ customers: Customer | Customer[] | null }[]>(
+    `customer_conversations?conversation_id=eq.${q(conversationId)}&select=customers(id,name)&limit=1`,
+  );
+  const customer = rows[0]?.customers;
+  return (Array.isArray(customer) ? customer[0] : customer) ?? null;
+}
+
 export async function profileFor(customer: Customer): Promise<Profile> {
   const [channels, notes] = await Promise.all([
     listChannels(customer.id),

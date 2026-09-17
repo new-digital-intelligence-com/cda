@@ -1,6 +1,6 @@
 import { elevenLabsGet } from "@/lib/elevenlabs";
 import { hasValidSession } from "@/lib/session";
-import { visitorId } from "@/lib/visitor";
+import { registerWebsiteConversation } from "@/lib/websiteSession";
 
 // WebRTC conversation token for voice conversations. Keeps the API key on the server.
 export async function GET() {
@@ -8,9 +8,14 @@ export async function GET() {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const { token } = await elevenLabsGet<{ token: string }>("/conversation/token");
-    // The browser passes this back when it connects, so the agent can look the visitor up.
-    return Response.json({ conversationToken: token, visitorId: await visitorId() });
+    const { token, conversation_id } = await elevenLabsGet<{ token: string; conversation_id?: string }>(
+      "/conversation/token",
+    );
+
+    // Tie this conversation to the visitor now, so Ellie's lookup recognises them.
+    await registerWebsiteConversation(conversation_id);
+
+    return Response.json({ conversationToken: token });
   } catch (error) {
     console.error(error);
     return Response.json({ error: "Could not start a voice session" }, { status: 502 });
