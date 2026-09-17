@@ -1,14 +1,23 @@
+import type { AvatarOrientation } from "@/components/types";
 import { elevenLabsGet } from "@/lib/elevenlabs";
 import { hasValidSession } from "@/lib/session";
 
 const DEFAULT_MAX_SESSION_SECONDS = 180;
 
+// The only output sizes Anam supports for cara-4 avatars.
+const VIDEO_SIZES: Record<AvatarOrientation, { videoWidth: number; videoHeight: number }> = {
+  horizontal: { videoWidth: 1152, videoHeight: 768 },
+  vertical: { videoWidth: 768, videoHeight: 1152 },
+};
+
 // Creates a short-lived Anam session token for Ellie's face. Anam's engine joins the ElevenLabs agent
 // through the signed URL, so Ellie keeps her prompt, voice and knowledge. Both API keys stay on the server.
-export async function POST() {
+export async function POST(request: Request) {
   if (!(await hasValidSession())) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const { orientation } = (await request.json().catch(() => ({}))) as { orientation?: string };
+  const videoSize = VIDEO_SIZES[orientation === "vertical" ? "vertical" : "horizontal"];
 
   const apiKey = process.env.ANAM_API_KEY;
   const avatarId = process.env.ANAM_AVATAR_ID;
@@ -31,6 +40,7 @@ export async function POST() {
           directorNotes: { presetStyle: "warm", expressivity: 0.5 },
         },
         environment: { elevenLabsAgentSettings: { signedUrl: signed_url, agentId } },
+        sessionOptions: videoSize,
       }),
       cache: "no-store",
     });

@@ -477,6 +477,7 @@ thinks and speaks, with the same prompt, voice and knowledge as every other chan
 | Performance | Director Notes preset `warm`, expressivity 0.5 |
 | Max call length | **180 seconds** (`ANAM_MAX_SESSION_SECONDS`, free plan maximum) |
 | Captions | Live transcript under the video |
+| Layout | **Horizontal** (1152×768) or **Vertical** (768×1152), picked before the call; the only two sizes Anam supports for Cara 4 |
 
 > The "Olivia" persona that Anam's onboarding creates (its own prompt, voice and GPT model) is **not used**:
 > the web app only borrows the Sofia face and plugs it into the ElevenLabs agent.

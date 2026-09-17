@@ -37,7 +37,8 @@ const channels: Channel[] = [
   },
   {
     name: "Instagram",
-    detail: "@samrasellimi",
+    // Display name only; the link below still opens the real account.
+    detail: "@CDA_2026_Support_Bot",
     href: "https://ig.me/m/samrasellimi",
     iconClassName: "bg-linear-to-tr from-[#f58529] via-[#dd2a7b] to-[#8134af]",
     icon: (

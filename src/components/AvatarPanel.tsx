@@ -3,12 +3,17 @@
 import type { AnamClient } from "@anam-ai/js-sdk";
 import { useEffect, useRef, useState } from "react";
 import { MessageBubble } from "./MessageBubble";
-import type { ChatMessage } from "./types";
+import type { AvatarOrientation, ChatMessage } from "./types";
 
 const VIDEO_ELEMENT_ID = "ellie-avatar-video";
 const START_ERROR = "Could not start the video call. Please try again.";
 
 type CallStatus = "idle" | "connecting" | "connected";
+
+const ORIENTATIONS: { value: AvatarOrientation; label: string }[] = [
+  { value: "horizontal", label: "▭ Horizontal" },
+  { value: "vertical", label: "▯ Vertical" },
+];
 
 export function AvatarPanel() {
   const clientRef = useRef<AnamClient | null>(null);
@@ -19,6 +24,7 @@ export function AvatarPanel() {
   const [error, setError] = useState<string | null>(null);
   const [maxSeconds, setMaxSeconds] = useState(180);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [orientation, setOrientation] = useState<AvatarOrientation>("horizontal");
 
   // Stop the stream (and the microphone) when the tab is left.
   useEffect(
@@ -39,7 +45,11 @@ export function AvatarPanel() {
     setError(null);
     setMessages([]);
     try {
-      const response = await fetch("/api/anam/session", { method: "POST" });
+      const response = await fetch("/api/anam/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orientation }),
+      });
       const body = (await response.json()) as { sessionToken?: string; maxSeconds?: number; error?: string };
       if (!response.ok || !body.sessionToken) {
         throw new Error(body.error ?? START_ERROR);
@@ -106,8 +116,19 @@ export function AvatarPanel() {
 
   return (
     <div className="flex flex-1 flex-col gap-4 bg-cda-grey-light p-4">
-      <div className={status === "idle" ? "hidden" : "relative overflow-hidden rounded-xl bg-cda-dark shadow-sm"}>
-        <video id={VIDEO_ELEMENT_ID} autoPlay playsInline className="aspect-video w-full object-cover" />
+      <div
+        className={
+          status === "idle"
+            ? "hidden"
+            : `relative overflow-hidden rounded-xl bg-cda-dark shadow-sm ${orientation === "vertical" ? "mx-auto w-full max-w-sm" : ""}`
+        }
+      >
+        <video
+          id={VIDEO_ELEMENT_ID}
+          autoPlay
+          playsInline
+          className={`w-full object-cover ${orientation === "vertical" ? "aspect-[2/3]" : "aspect-[3/2]"}`}
+        />
         {status === "connecting" && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-white/80">
             Connecting to Ellie…
@@ -123,6 +144,20 @@ export function AvatarPanel() {
             <p className="mt-1 max-w-md text-cda-text">
               Start a video call with Ellie. She listens, answers out loud and uses the same CDA knowledge as the chat.
             </p>
+          </div>
+          <div className="flex rounded-full bg-cda-grey p-1" role="group" aria-label="Video layout">
+            {ORIENTATIONS.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setOrientation(option.value)}
+                aria-pressed={orientation === option.value}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  orientation === option.value ? "bg-white text-cda-dark shadow-sm" : "text-cda-text hover:text-cda-dark"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
           {error && <p className="text-sm text-cda-red-dark">{error}</p>}
           <button
