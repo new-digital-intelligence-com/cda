@@ -9,6 +9,18 @@ import { visitorId } from "./visitor";
  * It runs when the session is created rather than through a dynamic variable: a variable that only
  * exists on the website would make the agent's tool call fail on every other channel.
  */
+/**
+ * `include_conversation_id=true` does not add a field to the response: it puts the id in the
+ * signed URL's query string, so read it from there.
+ */
+export function conversationIdFromSignedUrl(signedUrl: string): string | null {
+  try {
+    return new URL(signedUrl).searchParams.get("conversation_id");
+  } catch {
+    return null;
+  }
+}
+
 export async function registerWebsiteConversation(conversationId: string | undefined | null) {
   if (!conversationId || !customerStoreConfigured()) return;
 
