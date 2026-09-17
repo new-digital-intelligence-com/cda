@@ -36,6 +36,10 @@ Last updated: **17 September 2026**
 One AI agent (**Ellie**) on **ElevenLabs Agents** answers on every channel. Every channel uses the
 same prompt, the same knowledge base and the same model, so answers are consistent.
 
+Customers can also link their channels to one account, so Ellie recognises the same person on
+Telegram, email and the website and remembers what they asked before — see
+[section 16](#16-cross-channel-customer-memory).
+
 ```
                          ┌──────────────────────────────────────────┐
  Telegram bot ──────────►│                                          │
@@ -336,6 +340,8 @@ If used on a real site, add the domain in **Security → Allowlist**.
 - **Voice**: real-time WebRTC, animated orb, mute, end call, live transcript
 - **Avatar**: Anam video call with our own Ellie face and live captions, max 3 minutes per call (see section 9)
 - **Other channels card**: buttons that open Email (Gmail compose to the support address), the Telegram bot and an Instagram DM (`src/components/ChannelLinks.tsx`)
+- **Your CDA account**: create an account and link Telegram, email and other channels to it with a
+  short code, so Ellie recognises the same person everywhere (section 16)
 - **Password lock**: every page and API route requires `SITE_PASSWORD` (checked in `src/proxy.ts` and again in the API routes); site stays locked if the variable is missing
 
 ### Important files
@@ -753,6 +759,40 @@ Any message on any channel
 
 Conversation ends -> post-call webhook -> one short note saved
 ```
+
+### What the customer sees
+
+On the website, under "Message Ellie on your app", there is a **Your CDA account** panel
+(`src/components/AccountPanel.tsx`):
+
+1. **Create account** — name, email address, password. Signing up links that address straight away
+   and marks it verified, so email works with nothing else to do.
+2. **Your channels** — every linked channel, each with a **Remove** button.
+3. **+ Add a channel** — shows a code like `CDA-4F2K9M`. They paste it into Telegram (or send it
+   from another email address). Ellie confirms, and that channel is linked and verified.
+
+One code works once and expires after 30 minutes. A person can link **several accounts of the same
+kind**: two email addresses, two Telegram accounts, and so on.
+
+People who never create an account still get help exactly as before. They are simply remembered
+per channel: the same Telegram chat, or the same browser, picks up where it left off.
+
+### What is stored, and what is not
+
+**Supabase holds no messages.** Per conversation there is only:
+
+- a row in `customer_conversations`: `conversation_id -> customer`, with no content at all
+- once the conversation ends, **one line** in `customer_notes` (max 400 characters), for example
+  *"Asked to book an engineer for a CDA hob."*
+
+Ellie is given the **last 3** of those lines. Full transcripts stay in ElevenLabs, where retention
+is set to unlimited (`retention_days: -1`).
+
+Notes are written by the post-call webhook when a conversation **ends**, not while it is running,
+and only for conversations that belong to a customer. Someone anonymous leaves nothing behind.
+
+If a person chats on a channel **before** linking it, those notes are moved onto their account when
+they redeem the code, so nothing said earlier is lost.
 
 ### How each channel is identified
 
