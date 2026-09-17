@@ -59,6 +59,10 @@ Create `.env.local` (git-ignored). Copy the values from **Vercel → project `cd
 | `ANAM_API_KEY` | Anam API key |
 | `ANAM_AVATAR_ID` | Anam avatar Sofia |
 | `ANAM_MAX_SESSION_SECONDS` | `180` (Anam free plan limit) |
+| `SUPABASE_URL` | Supabase project for the cross-channel customer memory |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server only) |
+| `AGENT_TOOL_SECRET` | Secret the agent's tools send in `x-cda-agent-secret` |
+| `ELEVENLABS_WEBHOOK_SECRET` | Signing secret of the post-call webhook |
 
 ```bash
 npm run dev      # http://localhost:3000
@@ -91,6 +95,10 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
 - `src/app/api/elevenlabs/*`: signed URL (chat) and conversation token (voice)
 - `src/app/api/anam/session/route.ts` + `src/components/AvatarPanel.tsx`: Anam avatar. The server gets an ElevenLabs signed URL and creates an Anam session token (`avatarModel: cara-4`, `maxSessionLengthSeconds`, `directorNotes` warm 0.5, `sessionOptions` 1152×768 or 768×1152, `environment.elevenLabsAgentSettings`). Anam Lab stores **no** ElevenLabs link; the "Olivia" persona in Lab is not used
 - `src/components/ChannelLinks.tsx`: Email (Gmail compose), Telegram and Instagram buttons (Instagram label shows @CDA_2026_Support_Bot but opens @samrasellimi)
+- `src/app/api/agent/*` + `src/lib/customers.ts` + `supabase/schema.sql`: **cross-channel customer memory**
+  (CHANNEL_SETUP.md §16). Email is the bridge between channels. These three routes are exempt from the
+  site password in `src/proxy.ts` and use a shared secret / HMAC instead (`src/lib/agentAuth.ts`).
+  Code is written and builds; the Supabase project, the two agent tools and the webhook are **not set up yet**
 - Vercel deploys `main` automatically; after changing env vars on Vercel, redeploy
 
 **Anam** (free plan: 30 min/month, 3-min calls, 1 custom avatar) – avatar Sofia, Cara 4, supports horizontal and vertical.
@@ -103,6 +111,15 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
 
 ## 5. Open tasks (in order)
 
+0. **Cross-channel customer memory** – code is done, setup is not. Full details in CHANNEL_SETUP.md §16.
+   - Confirm which identifier Instagram (Custom Channel) and Freshdesk expose as dynamic variables:
+     the user sends one Instagram DM and one email, then read `GET /v1/convai/conversations/{id}` (free)
+   - User creates a Supabase project, runs `supabase/schema.sql`, and supplies the URL + service role key
+   - Add the four new variables to `.env.local` and Vercel → Redeploy
+   - Create the tools `customer_lookup` and `customer_link`, set empty-string placeholders for every
+     dynamic variable used, add the prompt block, add the post-call webhook → Publish
+   - Note: ElevenLabs' own `user_memory` setting is **off** on purpose — Telegram and email conversations
+     all carry the workspace owner's `user_id`, so switching it on would merge every customer into one memory
 1. **Slack** – waiting for the user:
    - The "New Digital Intelligence" Slack workspace hit the free plan's 10-app limit → use a new demo workspace or remove an unused app.
    - User creates the **CDA_Support** app from the manifest in CHANNEL_SETUP.md §10, installs it, and gives the **Bot User OAuth Token** + **Signing Secret** and the mode (mention-only or all messages).
@@ -120,4 +137,4 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
 | ~1 Oct 2026 | **Freshdesk trial ends** → email stops unless paid or moved to Make + Gmail |
 | ~17 Oct 2026 | ElevenLabs credits reset |
 | Before ~16 Nov 2026 | **Refresh the Instagram token** (60-day token) and update the Make reply scenario header |
-| After the demo | Rotate keys that were shared in chat (ElevenLabs, Anam), delete the Make API token, delete the unused LiveAvatar API key/secret/voice agent |
+| After the demo | Rotate keys that were shared in chat (ElevenLabs, Anam, **Supabase service role**), delete the Make API token, delete the unused LiveAvatar API key/secret/voice agent |

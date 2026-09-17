@@ -7,6 +7,11 @@ export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
 
+  // ElevenLabs calls these (agent tools and the post-call webhook), so there is no browser and no
+  // site password. They prove themselves with a shared secret header or an HMAC signature instead
+  // — see src/lib/agentAuth.ts — and each route rejects anything unsigned.
+  if (pathname.startsWith("/api/agent/")) return NextResponse.next();
+
   const isApi = pathname.startsWith("/api/");
   if (!sitePasswordConfigured()) {
     // Fail closed: without SITE_PASSWORD nothing is reachable.

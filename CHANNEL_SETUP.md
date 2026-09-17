@@ -27,6 +27,7 @@ Last updated: **17 September 2026**
 13. [Maintenance calendar](#13-maintenance-calendar)
 14. [Parked / not yet built](#14-parked--not-yet-built)
 15. [Troubleshooting and lessons learned](#15-troubleshooting-and-lessons-learned)
+16. [Cross-channel customer memory](#16-cross-channel-customer-memory)
 
 ---
 
@@ -358,6 +359,10 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `ANAM_API_KEY` | Anam API key (lab.anam.ai) |
 | `ANAM_AVATAR_ID` | Avatar shown in the Avatar tab: Sofia (our Ellie picture) `90e0c565-6c16-42a2-bd45-255f904df7a2` |
 | `ANAM_MAX_SESSION_SECONDS` | `180` (free plan maximum; the code default is also 180) |
+| `SUPABASE_URL` | Supabase project URL for the customer memory (section 16) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key — **server only, never in the browser** |
+| `AGENT_TOOL_SECRET` | Shared secret the agent's tools send in the `x-cda-agent-secret` header |
+| `ELEVENLABS_WEBHOOK_SECRET` | Signing secret of the post-call webhook (section 16) |
 
 After changing a variable on Vercel → **Redeploy**.
 
@@ -639,6 +644,9 @@ Example prompts:
 | Anam API key | Vercel env vars, `.env.local` | Was shared in chat → rotate after the demo |
 | LiveAvatar API key + ElevenLabs key copy (old avatar) | LiveAvatar account | Not used any more → delete the LiveAvatar API key and secret |
 | Slack bot token + signing secret | ElevenLabs Slack connection | From the CDA_Support Slack app |
+| Supabase service role key | Vercel env vars, `.env.local` | Was shared in chat → rotate after the demo |
+| `AGENT_TOOL_SECRET` | Vercel env vars, `.env.local`, ElevenLabs workspace secret | Generated randomly; must match in both places |
+| `ELEVENLABS_WEBHOOK_SECRET` | Vercel env vars, `.env.local` | Shown once when the post-call webhook is created |
 
 ---
 
@@ -651,7 +659,7 @@ Example prompts:
 | 17 Oct 2026 | ElevenLabs Creator credits reset |
 | **Before ~16 Nov 2026** | **Refresh the Instagram token** (link in section 8) and update the Make reply scenario header |
 | Monthly | Anam free plan gives 30 avatar minutes |
-| After the demo | Rotate the ElevenLabs API key (update Vercel), rotate the Anam API key, delete the Make API token and the old LiveAvatar key |
+| After the demo | Rotate the ElevenLabs API key (update Vercel), rotate the Anam API key, **rotate the Supabase service role key**, delete the Make API token and the old LiveAvatar key |
 | When CDA content changes | Update the PDFs in Drive (auto sync) |
 
 ---
@@ -716,3 +724,156 @@ enough for a demo but not for real traffic.
 | Our HeyGen "Ellie" avatar can't answer live | HeyGen app avatars only make recorded videos → recreate the face from the same picture on a live platform (done with Anam, free) |
 | Slack: "… has reached its app limit" | Free Slack workspaces allow 10 apps → use another workspace or remove an unused app |
 | Slack bot answers twice | The Slack app subscribes to both `app_mention` and `message.channels`/`message.groups` → keep one mode |
+
+---
+
+## 16. Cross-channel customer memory
+
+Ellie recognises the same person on every channel. A customer talks on Telegram and gives their
+email once; later they DM Instagram and give the same email once; from then on Ellie knows it is
+the same person everywhere, with no more questions.
+
+**The email address is the bridge.** Telegram, Instagram and Meta deliberately never tell you who
+their users are, so the only reliable link is something the customer tells you. An IP address is
+not usable: ElevenLabs stores none for chat channels, the IP you would see on Telegram or
+Instagram belongs to *their* servers (the same for every customer), and on the website one IP is
+shared by everyone on the same WiFi or mobile network.
+
+### How it works
+
+```
+Start of any conversation → Ellie calls customer_lookup (silent)
+     known   → greets by name, can refer to the last topic
+     unknown → helps normally, asks nothing
+        └─ only if the request needs identity (repair, warranty, parts, order chase)
+             → asks once for the email → customer_link → the channels become one person
+After the conversation → ElevenLabs post-call webhook → one short note saved
+```
+
+### The database (Supabase)
+
+Run `supabase/schema.sql` once in the Supabase project (SQL Editor → New query → paste → Run).
+
+| Table | Holds |
+|---|---|
+| `customers` | id, email (unique), name |
+| `customer_channels` | channel + channel key → customer id |
+| `customer_conversations` | conversation id → customer, so the post-call note knows where to go |
+| `customer_notes` | one short line per conversation |
+
+Row level security is on with no policies, so **only** the service role key (server side) can read
+the data. The publishable key sees nothing.
+
+Channel keys: `telegram` = chat id, `instagram` = sender id, `website` = the `cda_visitor` cookie,
+`email` = the address itself (so email needs no question at all), `slack` = Slack user id.
+
+### The routes in the web app
+
+| Route | Called by | Protected by |
+|---|---|---|
+| `POST /api/agent/customer-lookup` | tool `customer_lookup` | `x-cda-agent-secret` header |
+| `POST /api/agent/customer-link` | tool `customer_link` | `x-cda-agent-secret` header |
+| `POST /api/agent/post-call` | ElevenLabs post-call webhook | HMAC signature |
+
+These three are exempt from `SITE_PASSWORD` in `src/proxy.ts` because ElevenLabs calls them, not a
+browser. They carry their own proof instead — see `src/lib/agentAuth.ts`.
+
+A lookup that fails always answers "not found" with status 200, so a customer never sees an error
+because the database was slow or down.
+
+### The two tools on the agent
+
+Agent → **Tools** → **Add tool** → **Webhook**. Put the secret in **Workspace secrets** first, then
+pick it for the header.
+
+**`customer_lookup`** — `POST https://cda-nine-ebon.vercel.app/api/agent/customer-lookup`
+
+Description for the LLM: *"Check whether this person has contacted CDA before. Call once, silently,
+at the very start of every conversation. Never mention this tool."*
+
+| Body parameter | Value type | Value |
+|---|---|---|
+| `conversation_id` | Dynamic variable | `system__conversation_id` |
+| `telegram_chat_id` | Dynamic variable | `integration__telegram_chat_id` |
+| `website_id` | Dynamic variable | `website_id` (sent by the web app) |
+| `instagram_id` | Dynamic variable | *(confirm the name first — see below)* |
+| `email_address` | Dynamic variable | *(confirm the name first — see below)* |
+
+Returns `{ found, name, channels, recent }`. `recent` is at most three short lines.
+
+**`customer_link`** — `POST https://cda-nine-ebon.vercel.app/api/agent/customer-link`
+
+Description for the LLM: *"Save the email address the customer just gave so CDA recognises them on
+every channel. Call once, right after they give it."*
+
+Same parameters as above, plus `email` (LLM, required) and `name` (LLM, optional).
+Returns `{ ok, name, channels, recent }` — including what they told us on **other** channels.
+
+> Every dynamic variable used above needs a **placeholder / default of an empty string** in
+> Agent → Dynamic variables. Otherwise the tool call fails on the channels where that variable
+> does not exist (for example `integration__telegram_chat_id` on Instagram).
+
+### The post-call webhook
+
+ElevenLabs → **Settings** → **Webhooks** → add
+`https://cda-nine-ebon.vercel.app/api/agent/post-call`, event **post_call_transcription**.
+Copy the signing secret into `ELEVENLABS_WEBHOOK_SECRET` (`.env.local` **and** Vercel → Redeploy).
+
+This writes the memory, so no extra tool call is needed during the conversation.
+
+### Prompt block to add
+
+```
+# Recognising the customer
+
+At the very start of every conversation, call customer_lookup once. Never mention the tool and
+never read out any id.
+
+If it returns found = true:
+- Greet them by their first name.
+- You may briefly refer to what "recent" says, if it is relevant to what they ask now.
+- Do NOT read out addresses, order numbers, dates or other personal details from memory. If they
+  ask about something personal, first ask them to confirm one detail (for example the postcode on
+  the account), then continue.
+
+If it returns found = false:
+- Say nothing about it. Help them normally and ask no questions.
+- Only when the request needs their identity - booking an engineer, warranty, ordering a part,
+  chasing an existing repair or order - ask once for their email address, and say why:
+  "I can arrange that - what's the best email for the confirmation?"
+- When they give it, call customer_link with that email (and their name if you know it), then
+  carry on. If customer_link returns recent items from another channel, you may say that you can
+  see their earlier message.
+- If they would rather not give an email, say that is no problem and keep helping.
+
+Never ask for the email twice in one conversation, and never ask for it just to say hello.
+```
+
+### Setup order
+
+1. Confirm the Instagram and email identifiers (below)
+2. Supabase project → run `supabase/schema.sql` → copy the project URL and **service role** key
+3. Add the four variables to `.env.local` **and** Vercel → Redeploy
+4. ElevenLabs → Workspace secrets → add the value of `AGENT_TOOL_SECRET`
+5. Create the two tools, set the dynamic variable placeholders, add the prompt block → **Publish**
+6. Add the post-call webhook and save its secret
+7. Test with fake customers: Telegram first, then Instagram with the same email
+
+### Still to confirm
+
+| Channel | Identifier | Status |
+|---|---|---|
+| Telegram | `integration__telegram_chat_id` | ✅ Confirmed in the docs |
+| Website / voice | `website_id` | ✅ Sent by the web app |
+| Instagram | Custom Channel `user_identifier` | ❓ Send one DM, then read the conversation over the API |
+| Email | Freshdesk requester address | ❓ Send one email, then read the conversation over the API |
+
+Both are a free check: send one normal message on the channel, then read
+`GET /v1/convai/conversations/{id}` and look at the dynamic variables that arrived.
+
+### Privacy
+
+Customer records across channels are personal data under UK GDPR. For the demo use **fake
+customers only**. A typed email proves nothing, which is why the prompt makes Ellie verify one
+detail before revealing anything personal. The service role key is server-side only and must never
+be committed — this repository is public.

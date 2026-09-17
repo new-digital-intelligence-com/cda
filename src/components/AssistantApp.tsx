@@ -29,6 +29,16 @@ const TAB_LABELS: Record<AssistantMode, string> = {
   avatar: "🧑‍💼 Avatar",
 };
 
+/**
+ * Tells the agent which browser this is, so its customer_lookup tool can recognise a returning
+ * visitor. `website_id` is the dynamic variable the tool reads; `userId` also groups the
+ * conversations together on the ElevenLabs Users page.
+ */
+function visitorIdentity(visitorId: string | undefined) {
+  if (!visitorId) return {};
+  return { userId: visitorId, dynamicVariables: { website_id: visitorId } };
+}
+
 export default function AssistantApp() {
   return (
     <ConversationProvider>
@@ -133,12 +143,17 @@ function Assistant() {
     setError(null);
     const response = await fetch("/api/elevenlabs/signed-url");
     if (!response.ok) throw new Error("Could not start a chat session.");
-    const { signedUrl } = (await response.json()) as { signedUrl: string };
+    const { signedUrl, visitorId } = (await response.json()) as { signedUrl: string; visitorId?: string };
     sessionKindRef.current = "chat";
     pendingRef.current = withPending;
     skipGreetingRef.current = withPending !== null;
     if (withPending === null) setMessages([]);
-    conversation.startSession({ signedUrl, textOnly: true, overrides: { conversation: { textOnly: true } } });
+    conversation.startSession({
+      signedUrl,
+      textOnly: true,
+      overrides: { conversation: { textOnly: true } },
+      ...visitorIdentity(visitorId),
+    });
   }
 
   async function startVoiceSession() {
@@ -155,10 +170,13 @@ function Assistant() {
       setError("Could not start a voice session. Please try again.");
       return;
     }
-    const { conversationToken } = (await response.json()) as { conversationToken: string };
+    const { conversationToken, visitorId } = (await response.json()) as {
+      conversationToken: string;
+      visitorId?: string;
+    };
     sessionKindRef.current = "voice";
     setMessages([]);
-    conversation.startSession({ conversationToken, connectionType: "webrtc" });
+    conversation.startSession({ conversationToken, connectionType: "webrtc", ...visitorIdentity(visitorId) });
   }
 
   function endSession() {
