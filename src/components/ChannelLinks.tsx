@@ -53,10 +53,9 @@ const channels: Channel[] = [
 
 export function ChannelLinks() {
   return (
-    <section className="rounded-xl bg-white p-5 shadow-sm">
+    <section className="rounded-xl bg-white p-4 shadow-sm">
       <h2 className="font-semibold text-cda-dark">Message Ellie on your app</h2>
-      <p className="mt-1 text-sm text-cda-text">Same assistant, same answers.</p>
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-2 space-y-1.5">
         {channels.map((channel) => (
           <li key={channel.name}>
             <a

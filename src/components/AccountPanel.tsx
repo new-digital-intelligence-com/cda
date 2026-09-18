@@ -81,7 +81,7 @@ export function AccountPanel() {
 
   if (signedIn === null) {
     return (
-      <section className="rounded-xl bg-white p-5 shadow-sm">
+      <section className="rounded-xl bg-white p-4 shadow-sm">
         <h2 className="font-semibold text-cda-dark">Your CDA account</h2>
         <p className="mt-2 text-sm text-cda-text">Loading…</p>
       </section>
@@ -90,81 +90,88 @@ export function AccountPanel() {
 
   if (!signedIn) {
     return (
-      <section className="rounded-xl bg-white p-5 shadow-sm">
+      <section className="rounded-xl bg-white p-4 shadow-sm">
         <h2 className="font-semibold text-cda-dark">Your CDA account</h2>
         <p className="mt-1 text-sm text-cda-text">
-          Create an account to link Telegram, Instagram and your email addresses. Ellie then knows you on every
-          one of them, and remembers what you asked before.
+          Link Telegram, Instagram and your email addresses, so Ellie knows you on all of them and remembers
+          what you asked before.
         </p>
 
-        <div className="mt-4 flex gap-1 rounded-lg bg-cda-grey-light p-1 text-sm">
-          {(["signup", "signin"] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => {
-                setMode(option);
-                setError(null);
-              }}
-              className={`flex-1 rounded-md px-3 py-1.5 font-medium ${
-                mode === option ? "bg-white text-cda-dark shadow-sm" : "text-cda-text"
-              }`}
-            >
-              {option === "signup" ? "Create account" : "Sign in"}
-            </button>
-          ))}
-        </div>
+        {/* Collapsed by default: the form is long, and most visitors only want to chat. */}
+        <details className="mt-3">
+          <summary className="cursor-pointer list-none rounded-lg bg-cda-red px-3 py-2 text-center text-sm font-semibold text-white">
+            Create account or sign in
+          </summary>
 
-        <form
-          className="mt-3 space-y-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit(mode);
-          }}
-        >
-          {mode === "signup" && (
+          <div className="mt-3 flex gap-1 rounded-lg bg-cda-grey-light p-1 text-sm">
+            {(["signup", "signin"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => {
+                  setMode(option);
+                  setError(null);
+                }}
+                className={`flex-1 rounded-md px-3 py-1.5 font-medium ${
+                  mode === option ? "bg-white text-cda-dark shadow-sm" : "text-cda-text"
+                }`}
+              >
+                {option === "signup" ? "Create account" : "Sign in"}
+              </button>
+            ))}
+          </div>
+
+          <form
+            className="mt-3 space-y-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit(mode);
+            }}
+          >
+            {mode === "signup" && (
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Your name"
+                autoComplete="name"
+                className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm"
+              />
+            )}
             <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Your name"
-              autoComplete="name"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              type="email"
+              required
+              placeholder="Email address"
+              autoComplete="email"
               className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm"
             />
-          )}
-          <input
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            type="email"
-            required
-            placeholder="Email address"
-            autoComplete="email"
-            className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm"
-          />
-          <input
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            type="password"
-            required
-            minLength={8}
-            placeholder="Password (8 characters or more)"
-            autoComplete={mode === "signup" ? "new-password" : "current-password"}
-            className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm"
-          />
-          {error && <p className="text-sm text-cda-red">{error}</p>}
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-lg bg-cda-red px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {mode === "signup" ? "Create account" : "Sign in"}
-          </button>
-        </form>
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              required
+              minLength={8}
+              placeholder="Password (8 characters or more)"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm"
+            />
+            {error && <p className="text-sm text-cda-red">{error}</p>}
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-lg bg-cda-red px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {mode === "signup" ? "Create account" : "Sign in"}
+            </button>
+          </form>
+        </details>
       </section>
     );
   }
 
   return (
-    <section className="rounded-xl bg-white p-5 shadow-sm">
+    <section className="rounded-xl bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <h2 className="font-semibold text-cda-dark">Your channels</h2>
         <button

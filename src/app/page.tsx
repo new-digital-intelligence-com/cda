@@ -42,37 +42,40 @@ export default function Home() {
         <div className="h-1 bg-cda-red" />
       </header>
 
-      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 px-4 py-6 lg:grid-cols-[320px_1fr]">
-        <aside className="space-y-4">
-          <section className="rounded-xl bg-white p-5 shadow-sm">
-            <h1 className="text-2xl font-bold text-cda-dark">Hi, I&apos;m Ellie</h1>
-            <p className="mt-2 text-cda-text">
-              The virtual assistant for CDA kitchen appliances. Chat with me, send a photo or PDF, or switch to
-              voice and just talk.
+      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-4 px-4 py-4 lg:grid-cols-[320px_1fr] lg:gap-6">
+        {/* On a phone the assistant comes first, so nobody scrolls past the sidebar to reach it. */}
+        <div className="order-1 lg:order-2">
+          <AssistantApp />
+        </div>
+
+        <aside className="order-2 space-y-3 lg:order-1 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
+          <section className="rounded-xl bg-white p-4 shadow-sm">
+            <h1 className="text-xl font-bold text-cda-dark">Hi, I&apos;m Ellie</h1>
+            <p className="mt-1 text-sm text-cda-text">
+              The virtual assistant for CDA kitchen appliances. Chat, send a photo or PDF, or just talk.
             </p>
-          </section>
-          <section className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="font-semibold text-cda-dark">I can help with</h2>
-            <ul className="mt-3 space-y-2 text-sm text-cda-text">
-              {helpTopics.map((topic) => (
-                <li key={topic} className="flex gap-2">
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-cda-red" />
-                  {topic}
-                </li>
-              ))}
-            </ul>
+            <details className="group mt-3">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-cda-dark">
+                What I can help with
+                <span className="float-right text-cda-text transition group-open:rotate-180">⌄</span>
+              </summary>
+              <ul className="mt-2 space-y-1.5 text-sm text-cda-text">
+                {helpTopics.map((topic) => (
+                  <li key={topic} className="flex gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-cda-red" />
+                    {topic}
+                  </li>
+                ))}
+              </ul>
+            </details>
           </section>
           <ChannelLinks />
           <AccountPanel />
-          <section className="rounded-xl border-l-4 border-cda-red bg-white p-5 text-sm text-cda-text shadow-sm">
-            <p className="font-semibold text-cda-dark">Smell gas?</p>
-            <p className="mt-1">
-              Leave the property and call the National Gas Emergency Service on <strong>0800 111 999</strong>.
-            </p>
-          </section>
+          <p className="rounded-xl border-l-4 border-cda-red bg-white px-4 py-3 text-sm text-cda-text shadow-sm">
+            <strong className="text-cda-dark">Smell gas?</strong> Leave the property and call{" "}
+            <strong>0800 111 999</strong>.
+          </p>
         </aside>
-
-        <AssistantApp />
       </main>
 
       <footer className="mt-auto bg-cda-blue text-white">
