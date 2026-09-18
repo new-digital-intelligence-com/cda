@@ -1,6 +1,6 @@
 # Claude handoff – CDA multi-channel assistant demo
 
-Read this first when continuing the project on another device. Last updated: **17 September 2026**.
+Read this first when continuing the project on another device. Last updated: **18 September 2026**.
 Full channel-by-channel setup (IDs, steps, costs, troubleshooting): [CHANNEL_SETUP.md](CHANNEL_SETUP.md).
 
 > **This repository is public.** Never write API keys, tokens, passwords or secrets into any committed file.
@@ -21,7 +21,7 @@ knowledge base and model. Only **Agent mode** (Ellie replies directly) is active
 | Email cda_domestic_appliances@new-digital-intelligence.com | ✅ Live | Freshdesk trial + native Freshdesk trigger |
 | Instagram DMs | ✅ Live | Make.com scenarios + ElevenLabs Custom Channel |
 | Hosted web page / QR code | ✅ Live | ElevenLabs talk-to link (not password protected) |
-| **This web app** (chat, file upload, voice, video avatar, channel links) | ✅ Live | Next.js on Vercel: https://cda-nine-ebon.vercel.app (password protected) |
+| **This web app** (chat, file upload, voice, video avatar, channel links) | ✅ Live | Next.js on Vercel: https://cda-demo.vercel.app (password protected) |
 | Video avatar (Avatar tab) | ✅ Live | **Anam** avatar "Sofia" (the user's own Ellie picture) joined to the ElevenLabs agent |
 | Slack (bot "CDA_Support") | ⏳ In progress | Native ElevenLabs Slack integration, own Slack app (see §5) |
 | WhatsApp, phone number, Copilot mode | ⏸ Parked | See CHANNEL_SETUP.md §14 |

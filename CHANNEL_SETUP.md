@@ -3,7 +3,7 @@
 Demo built by **NDI (New Digital Intelligence)** for **CDA** (UK kitchen appliance brand, www.cda.co.uk).
 It is a demo and not an official CDA service.
 
-Last updated: **17 September 2026**
+Last updated: **18 September 2026**
 
 > **Secrets are not written in this file.** API keys, tokens and passwords are stored in the tools
 > themselves (ElevenLabs, Make.com, Anam, Slack, Vercel, `.env.local`). See [Credentials and where they live](#12-credentials-and-where-they-live).
@@ -329,7 +329,7 @@ If used on a real site, add the domain in **Security → Allowlist**.
 |---|---|
 | Folder | This repository (local folder `cda-web-app/`) |
 | Repository | `github.com/new-digital-intelligence-com/cda` (branch `main`) |
-| Live URL | https://cda-nine-ebon.vercel.app (password protected) |
+| Live URL | https://cda-demo.vercel.app (password protected) |
 | Stack | Next.js 16, React 19, Tailwind 4, `@elevenlabs/react` |
 | Style | CDA website colours (red `#e84339`, dark `#222222`, blue-grey `#9dbdcb`), no CDA logo, "NDI demo" banner |
 
@@ -860,7 +860,7 @@ customer never sees an error because the database was slow.
 | Workspace secret `CDA_AGENT_TOOL_SECRET` | `DXmaQafUvJljsoKMs0nO` |
 | Tool `customer_lookup` | `tool_9201m2rhvc78e339hna52s5jfryf` |
 | Tool `customer_link` | `tool_0301m2rhvckwepns0q0dhn26xnvr` |
-| Post-call webhook | `5c8daa58c85c43feacc9c0b2e9599f77` |
+| Post-call webhook | `cdbf083668794fe0b107eb26730cdbc6` |
 
 Both tools take only `conversation_id` (bound to `system__conversation_id`); `customer_link` also
 takes the `code` the customer typed. There are **no dynamic variable placeholders** on the agent.
