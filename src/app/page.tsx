@@ -43,8 +43,10 @@ export default function Home() {
       </header>
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 gap-4 px-4 py-4 lg:grid-cols-[320px_1fr] lg:gap-6">
-        {/* On a phone the assistant comes first, so nobody scrolls past the sidebar to reach it. */}
-        <div className="order-1 lg:order-2">
+        {/* On a phone the assistant comes first, so nobody scrolls past the sidebar to reach it.
+            The flex wrapper lets the panel stretch to the full height of the row instead of
+            stopping at its minimum and leaving empty space beside the sidebar. */}
+        <div className="order-1 flex min-w-0 lg:order-2">
           <AssistantApp />
         </div>
 

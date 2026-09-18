@@ -208,7 +208,7 @@ function Assistant() {
   }
 
   return (
-    <section className="flex min-h-[640px] flex-col overflow-hidden rounded-xl bg-white shadow-sm">
+    <section className="flex min-h-[640px] flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-cda-grey px-4 py-3">
         <div className="flex rounded-full bg-cda-grey p-1" role="tablist" aria-label="Assistant mode">
           {(["chat", "voice", "avatar"] as const).map((item) => (
