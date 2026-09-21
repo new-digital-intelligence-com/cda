@@ -179,13 +179,51 @@ export async function removeChannel(customerId: string, channel: string, key: st
   );
 }
 
-/** Finds the customer this channel belongs to, creating an anonymous record the first time. */
+/**
+ * Finds the customer this channel belongs to, creating an anonymous record the first time.
+ *
+ * Two messages from someone new can arrive at the same moment and both create a record. The first
+ * one to claim the channel keeps it; the other drops its record and uses the winner, so no empty
+ * duplicate is left behind.
+ */
 export async function customerForChannel(identity: Identity, verified: boolean): Promise<Customer> {
   const known = await findByChannel(identity);
   if (known) return known.customer;
   const customer = await createCustomer(identity.name);
-  await attachChannel(customer.id, identity, verified);
+  await rest("customer_channels?on_conflict=channel,channel_key", {
+    method: "POST",
+    prefer: "resolution=ignore-duplicates,return=minimal",
+    body: JSON.stringify({ channel: identity.channel, channel_key: identity.key, customer_id: customer.id, verified }),
+  });
+  const owner = await findByChannel(identity);
+  if (owner && owner.customer.id !== customer.id) {
+    await rest(`customers?id=eq.${q(customer.id)}`, { method: "DELETE", prefer: "return=minimal" });
+    return owner.customer;
+  }
   return customer;
+}
+
+/**
+ * Ellie decided an email came from a robot. The record made for its sender a moment earlier is
+ * dropped again, but only if that is all it is: no account, no notes, no other channel and no other
+ * conversation.
+ */
+export async function forgetRobotSender(conversationId: string | null) {
+  if (!conversationId) return;
+  const links = await rest<{ customer_id: string }[]>(
+    `customer_conversations?conversation_id=eq.${q(conversationId)}&select=customer_id&limit=1`,
+  );
+  const id = links[0]?.customer_id;
+  if (!id) return;
+  const [owners, channels, notes, conversations] = await Promise.all([
+    rest<{ auth_user_id: string | null }[]>(`customers?id=eq.${q(id)}&select=auth_user_id&limit=1`),
+    listChannels(id),
+    rest<{ id: number }[]>(`customer_notes?customer_id=eq.${q(id)}&select=id&limit=1`),
+    rest<{ conversation_id: string }[]>(`customer_conversations?customer_id=eq.${q(id)}&select=conversation_id&limit=2`),
+  ]);
+  if (!owners[0] || owners[0].auth_user_id || notes.length || conversations.length > 1) return;
+  if (channels.length > 1 || channels.some((channel) => channel.channel !== "email")) return;
+  await rest(`customers?id=eq.${q(id)}`, { method: "DELETE", prefer: "return=minimal" });
 }
 
 /**

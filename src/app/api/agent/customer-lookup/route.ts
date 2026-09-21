@@ -1,4 +1,5 @@
 import { hasValidToolSecret } from "@/lib/agentAuth";
+import { isRobotAddress } from "@/lib/emailParse";
 import {
   customerForChannel,
   customerForConversation,
@@ -50,6 +51,9 @@ export async function POST(request: Request) {
       }
       return Response.json({ found: false });
     }
+
+    // No-reply and notification senders are robots, not customers: they get no record at all.
+    if (identity.channel === "email" && isRobotAddress(identity.key)) return Response.json({ found: false });
 
     // First time on this channel: remember it anyway, so the next conversation on the same channel
     // picks up where this one left off. An email address comes from the email itself (the Gmail

@@ -11,7 +11,7 @@
 // ElevenLabs' repeated deliveries from producing a second reply. It keeps who wrote and the
 // subject, never the text.
 
-import { customerForChannel, rememberConversation } from "./customers";
+import { customerForChannel, forgetRobotSender, rememberConversation } from "./customers";
 import { getEmailMode } from "./emailMode";
 import { automatedReason, buildReply, isSkip, parseGmailMessage, plainReply, replySubject, textForEllie, type IncomingEmail } from "./emailParse";
 import {
@@ -328,6 +328,10 @@ export async function handleEllieReply(payload: ReplyWebhook): Promise<{ outcome
   if (isSkip(text)) {
     if (await move(row.gmail_id, ["new", "waiting"], { status: "skipped", reason: "Ellie: not written by a customer" })) {
       await label(row.gmail_id, "skipped");
+      // A robot is not a customer: drop the record made for this sender, if that is all it is.
+      await forgetRobotSender(row.conversation_id ?? payload.conversation_id ?? null).catch((error) =>
+        console.error("Could not forget a robot sender", error),
+      );
     }
     return { outcome: "skipped" };
   }

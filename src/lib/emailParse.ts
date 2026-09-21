@@ -170,6 +170,16 @@ const ROBOT_MAILBOX =
 const ROBOT_DOMAINS = ["facebookmail.com", "mail.instagram.com", "accounts.google.com"];
 const ROBOT_SUBJECT =
   /\b(verification|security|confirmation|login|sign[- ]in|one[- ]time) code\b|\bOTP\b|new sign[- ]in|sign[- ]in attempt|delivery status notification|undeliverable|mail delivery failed|out of office|automatic reply|auto[- ]?reply/i;
+/** An address that only robots send from: no-reply mailboxes and notification services. */
+export function isRobotAddress(address: string): boolean {
+  const [mailbox, domain = ""] = address.toLowerCase().split("@");
+  return (
+    NO_REPLY.test(mailbox) ||
+    ROBOT_MAILBOX.test(mailbox) ||
+    ROBOT_DOMAINS.some((robot) => domain === robot || domain.endsWith(`.${robot}`))
+  );
+}
+
 const GMAIL_CATEGORIES: Record<string, string> = {
   CATEGORY_PROMOTIONS: "Promotions",
   CATEGORY_SOCIAL: "Social",

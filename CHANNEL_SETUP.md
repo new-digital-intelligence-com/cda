@@ -955,6 +955,12 @@ kind**: two email addresses, two Telegram accounts, and so on.
 People who never create an account still get help exactly as before. They are simply remembered
 per channel: the same Telegram chat, or the same browser, picks up where it left off.
 
+**Robots are not customers.** No-reply and notification senders (e.g. `no-reply@mail.instagram.com`,
+`noreply@facebookmail.com`) never get a record, and when Ellie answers `SKIP` to an email the record
+made for its sender is dropped again, as long as it holds nothing else. Two first messages from the
+same new person at the same moment make one record, not two. The robot records left from the
+Freshdesk days were removed on 21 Sep 2026.
+
 ### What is stored, and what is not
 
 **Supabase holds no messages.** Per conversation there is only:
