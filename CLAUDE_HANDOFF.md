@@ -21,7 +21,7 @@ for staff, and Aida rooms draft answers for staff on live calls.
 | Telegram @CDA_2026_Support_Bot | ✅ Live | Native ElevenLabs Telegram trigger |
 | Email cda_domestic_appliances@new-digital-intelligence.com | ✅ Live (21 Sep) | Gmail push → web app → Ellie's "CDA email" Custom Channel → sent, or a Gmail draft (`email_mode` on Aida). Freshdesk no longer used |
 | Instagram DMs @new_digital_intelligence | ✅ Live (new account + new Meta app, 21 Sep) | Make.com scenarios + ElevenLabs Custom Channel |
-| Facebook Messenger (Page "New Digital Intelligence") | ✅ Built 21 Sep | Meta webhook → web app (`src/lib/messenger.ts`) → Ellie's "CDA Messenger" Custom Channel. Not Make: its free plan allows 2 active scenarios, both used by Instagram |
+| Facebook Messenger (Page "New Digital Intelligence") | ✅ Live 21 Sep (tested from an account with no role: works, no App Review) | Meta webhook → web app (`src/lib/messenger.ts`) → Ellie's "CDA Messenger" Custom Channel. Not Make: its free plan allows 2 active scenarios, both used by Instagram |
 | Hosted web page / QR code | ✅ Live | ElevenLabs talk-to link (not password protected) |
 | **This web app** (chat, file upload, voice, video avatar, Aida calls, channel links) | ✅ Live | Next.js on Vercel: https://cda-demo.vercel.app (site password) — customers only |
 | **Admin page** `/admin` (Aida rooms, email switch, customers + Claude insights) | ✅ Live (21 Sep) | Same app, behind the Aida staff password — staff only |

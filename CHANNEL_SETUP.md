@@ -230,9 +230,8 @@ Message ← Messenger Send API ← /api/messenger/reply ← reply webhook ←┘
   2,000-character messages; photos and files are not seen (Ellie is told so)
 - New people are recognised by name (Messenger profile) and remembered like Telegram (section 7)
 - Our own Page's echoes are ignored. With `META_APP_SECRET` set, Meta's signature is checked too
-- **App Review**: Meta says none is needed to message for your own Page, but also that Standard
-  Access only covers people with a role on the app or Page. If someone without a role gets no answer,
-  add them as a Tester (App roles) or request Advanced Access for `pages_messaging`
+- **No App Review needed** for our own Page: tested on 21 Sep 2026 from a Facebook account with no
+  role on the app or the Page, and Ellie answered
 
 ---
 
@@ -515,7 +514,7 @@ token, Messenger Page token, Anthropic, Freshdesk; delete the Make API token.
 | A customer gets two answers to one email | The Freshdesk trigger is still on Ellie → remove it |
 | Instagram DMs don't arrive | App not **Published**, account not subscribed to `messages`, or webhook not verified |
 | Instagram: Ellie answers, nothing is sent | Token expired → refresh it (section 5) |
-| Messenger: no answer | Webhook verified and Page subscribed to **messages**? Sender without a role on the app → add as Tester or get Advanced Access. Vercel logs for `messenger` |
+| Messenger: no answer | Webhook verified and Page subscribed to **messages**? Page token still valid? Vercel logs for `messenger` |
 | Make: "Maximum number of active scenarios" | Free plan = 2 active scenarios (both Instagram) → build in the web app or upgrade |
 | Meta: "Insufficient developer role" | Add the account as **Instagram Tester** and accept at instagram.com/accounts/manage_access |
 | Avatar call won't start | Browser console (F12) and Vercel logs; check `ANAM_*`, input format PCM 16000 Hz, 3-minute limit |
