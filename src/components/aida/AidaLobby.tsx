@@ -204,6 +204,20 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
     }
   }
 
+  async function closeRoom(roomCode: string) {
+    if (!window.confirm(`Close room ${roomCode}? Everyone in it is disconnected.`)) return;
+    setBusy(true);
+    setError(null);
+    const response = await fetch("/api/aida/close", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-aida-staff": staffToken },
+      body: JSON.stringify({ code: roomCode }),
+    }).catch(() => null);
+    if (!response?.ok) setError("Could not close the room. Please try again.");
+    setRooms(await loadRooms().catch(() => rooms));
+    setBusy(false);
+  }
+
   if (joined) {
     return (
       <AidaRoom
@@ -314,6 +328,7 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
           highlight
           busy={busy}
           onJoin={(roomCode) => void enter("/api/aida/join", { code: roomCode })}
+          onClose={(roomCode) => void closeRoom(roomCode)}
         />
         <RoomList
           heading="Staff rooms"
@@ -321,6 +336,7 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
           rooms={staffRooms}
           busy={busy}
           onJoin={(roomCode) => void enter("/api/aida/join", { code: roomCode })}
+          onClose={(roomCode) => void closeRoom(roomCode)}
         />
         <p className="text-xs text-cda-text">
           To test as a customer, open the room&apos;s invite link in a new tab. Staff sign-in only applies to
@@ -338,6 +354,7 @@ function RoomList({
   highlight = false,
   busy,
   onJoin,
+  onClose,
 }: {
   heading: string;
   empty: string;
@@ -345,6 +362,7 @@ function RoomList({
   highlight?: boolean;
   busy: boolean;
   onJoin: (code: string) => void;
+  onClose: (code: string) => void;
 }) {
   return (
     <div className="rounded-xl bg-white p-5 shadow-sm">
@@ -369,14 +387,24 @@ function RoomList({
                   {new Date(room.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </span>
               </span>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onJoin(room.code)}
-                className="shrink-0 rounded-full bg-cda-red px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-              >
-                Join
-              </button>
+              <span className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onClose(room.code)}
+                  className="rounded-full border border-cda-grey bg-white px-3 py-1.5 text-xs font-semibold text-cda-text disabled:opacity-60"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onJoin(room.code)}
+                  className="rounded-full bg-cda-red px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  Join
+                </button>
+              </span>
             </li>
           ))}
         </ul>

@@ -31,7 +31,7 @@ knowledge base and model. Only **Agent mode** (Ellie replies directly) is active
 ## 2. How the user wants you to work (important)
 
 - **Never use subagents or workflows.** Do all work yourself.
-- **Git commits:** author **HelmiDev03 <helmipaty@gmail.com>**, and **no `Co-Authored-By` trailer**. Only push when the user says so.
+- **Git commits:** author **HelmiDev03 <helmipaty@gmail.com>**, and **no `Co-Authored-By` trailer**. **Push straight after committing** — the user said (21 Sep 2026) not to wait for their confirmation. Vercel deploys `main` automatically, so a push is a deploy: build, type-check and lint first, and never push secrets (the repo is public).
 - **Don't spend credits testing.** Never start conversations with Ellie (chat, voice, avatar calls, simulate-conversation) or start avatar/phone sessions yourself. Free read-only API checks are fine. Give the user test questions with expected answers instead.
 - **One step at a time, simple English** (the user is not a native English speaker). Wait until a step is finished before the next.
 - **No bridge/workaround code for channels.** Prefer native ElevenLabs integrations or no-code tools (Make.com). The web app itself is the exception.

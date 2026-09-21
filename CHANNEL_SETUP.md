@@ -979,7 +979,7 @@ All under `/api/aida/`, open past the site password and each checking for itself
 | `GET/POST /api/aida/events` | room ticket | the record; customers cannot post drafts or decisions, and never get drafts back |
 | `POST /api/aida/scribe-token` | room ticket | a one-use Scribe token, only for an open room |
 | `POST /api/aida/copilot` | employee ticket | a text session with Aida |
-| `POST /api/aida/close` | employee ticket | end the room for everyone |
+| `POST /api/aida/close` | employee ticket, **or** staff token + room code | end the room for everyone — from inside it ("End room") or from the lobby ("Close") without joining |
 
 An employee ticket is only ever issued to someone who sent a valid staff token, so it is enough on
 its own for the last two.
