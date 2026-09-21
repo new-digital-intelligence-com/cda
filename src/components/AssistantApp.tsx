@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AidaJoin } from "./aida/AidaJoin";
 import { AvatarPanel } from "./AvatarPanel";
 import { EmailTranscriptForm, postEmail } from "./EmailTranscriptForm";
+import { LanguagePicker } from "./LanguagePicker";
 import { MessageBubble, TypingIndicator } from "./MessageBubble";
 import { VoiceOrb } from "./VoiceOrb";
 import {
@@ -13,6 +14,7 @@ import {
   MAX_FILES_PER_MESSAGE,
   type AssistantMode,
   type Attachment,
+  type CallLanguage,
   type ChatMessage,
 } from "./types";
 
@@ -49,6 +51,8 @@ function Assistant() {
   const [files, setFiles] = useState<File[]>([]);
   /** The ElevenLabs conversation on screen, so its transcript can be emailed. */
   const [conversationId, setConversationId] = useState<string | null>(null);
+  /** Language of the next voice or avatar call; shared by both tabs. */
+  const [callLanguage, setCallLanguage] = useState<CallLanguage>("en");
 
   const sessionKindRef = useRef<AssistantMode | null>(null);
   const pendingRef = useRef<PendingMessage | null>(null);
@@ -175,7 +179,12 @@ function Assistant() {
     setConversationId(id ?? null);
     sessionKindRef.current = "voice";
     setMessages([]);
-    conversation.startSession({ conversationToken, connectionType: "webrtc" });
+    // Polish uses Ellie's "pl" preset in ElevenLabs (Polish greeting, multilingual voice model, same voice).
+    conversation.startSession({
+      conversationToken,
+      connectionType: "webrtc",
+      ...(callLanguage === "pl" ? { overrides: { agent: { language: "pl" } } } : {}),
+    });
   }
 
   function endSession() {
@@ -417,12 +426,15 @@ function Assistant() {
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={() => void startVoiceSession()}
-                  className="rounded-full bg-cda-red px-8 py-3 font-semibold text-white shadow transition hover:bg-cda-red-dark"
-                >
-                  Start voice call
-                </button>
+                <div className="flex flex-col items-center gap-3">
+                  <LanguagePicker value={callLanguage} onChange={setCallLanguage} />
+                  <button
+                    onClick={() => void startVoiceSession()}
+                    className="rounded-full bg-cda-red px-8 py-3 font-semibold text-white shadow transition hover:bg-cda-red-dark"
+                  >
+                    Start voice call
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -445,7 +457,7 @@ function Assistant() {
           )}
         </div>
       ) : mode === "avatar" ? (
-        <AvatarPanel />
+        <AvatarPanel language={callLanguage} onLanguageChange={setCallLanguage} />
       ) : (
         // A live call with CDA staff. From here someone is always a customer: the staff side is /admin.
         <div className="flex-1 overflow-y-auto bg-cda-grey-light p-4">

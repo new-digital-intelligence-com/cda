@@ -17,8 +17,10 @@ export async function POST(request: Request) {
   if (!(await hasValidSession())) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { orientation } = (await request.json().catch(() => ({}))) as { orientation?: string };
+  const { orientation, language } = (await request.json().catch(() => ({}))) as { orientation?: string; language?: string };
   const videoSize = VIDEO_SIZES[orientation === "vertical" ? "vertical" : "horizontal"];
+  // Polish uses Ellie's "pl" preset in ElevenLabs. Anam passes the override on when it joins Ellie.
+  const languageOverride = language === "pl" ? { conversationConfigOverride: { agent: { language: "pl" } } } : {};
 
   const apiKey = process.env.ANAM_API_KEY;
   const avatarId = process.env.ANAM_AVATAR_ID;
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
           maxSessionLengthSeconds: maxSeconds,
           directorNotes: { presetStyle: "warm", expressivity: 0.5 },
         },
-        environment: { elevenLabsAgentSettings: { signedUrl: signed_url, agentId } },
+        environment: { elevenLabsAgentSettings: { signedUrl: signed_url, agentId, ...languageOverride } },
         sessionOptions: videoSize,
       }),
       cache: "no-store",

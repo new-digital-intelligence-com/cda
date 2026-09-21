@@ -96,7 +96,8 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
 
 **ElevenLabs** (Creator plan, 121,005 credits/month, resets ~17th)
 - Agent "CDA Assistant – Demo", ID `agent_3601m2p374tce96b7p6hdfz5f1tv`, branch `agtbrch_9301m2p375xzetbbsyymxnbnsf1s`
-- Gemini 3.7 Flash (temperature 0), voice **Shelley** (British), TTS **Eleven Flash v2** (English-only), STT **Scribe Realtime**, turn model turn_v3
+- Gemini 3.7 Flash (temperature 0), voice **Shelley** (British), TTS **Eleven Flash v2** for English, STT **Scribe Realtime**, turn model turn_v3
+- **Polish** (21 Sep): language preset `pl` (Polish greeting, TTS Flash v2.5, still Shelley); the `language` override is allowed in Security. The website's Voice and Avatar tabs have an English | Polski switch (`src/components/LanguagePicker.tsx`); the avatar passes it through Anam's `conversationConfigOverride`
 - **Audio: input PCM 16000 Hz (required by Anam), output PCM 24000 Hz**
 - 31 knowledge documents (21 cda.co.uk URLs + 10 PDFs synced from Google Drive), RAG every turn
 - Prompt has per-channel rules ("Telegram only", "Instagram only", "Website chat", "Email only", phone/avatar short answers)

@@ -3,8 +3,9 @@
 import type { AnamClient } from "@anam-ai/js-sdk";
 import { useEffect, useRef, useState } from "react";
 import { EmailTranscriptForm, postEmail } from "./EmailTranscriptForm";
+import { LanguagePicker } from "./LanguagePicker";
 import { MessageBubble } from "./MessageBubble";
-import type { AvatarOrientation, ChatMessage } from "./types";
+import type { AvatarOrientation, CallLanguage, ChatMessage } from "./types";
 
 const VIDEO_ELEMENT_ID = "ellie-avatar-video";
 const START_ERROR = "Could not start the video call. Please try again.";
@@ -16,7 +17,13 @@ const ORIENTATIONS: { value: AvatarOrientation; label: string }[] = [
   { value: "vertical", label: "▯ Vertical" },
 ];
 
-export function AvatarPanel() {
+export function AvatarPanel({
+  language,
+  onLanguageChange,
+}: {
+  language: CallLanguage;
+  onLanguageChange: (language: CallLanguage) => void;
+}) {
   const clientRef = useRef<AnamClient | null>(null);
   // Bumped on every start/stop so a call that is still connecting can tell it was cancelled.
   const attemptRef = useRef(0);
@@ -51,7 +58,7 @@ export function AvatarPanel() {
       const response = await fetch("/api/anam/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orientation }),
+        body: JSON.stringify({ orientation, language }),
       });
       const body = (await response.json()) as {
         sessionToken?: string;
@@ -154,19 +161,22 @@ export function AvatarPanel() {
               Start a video call with Ellie. She listens, answers out loud and uses the same CDA knowledge as the chat.
             </p>
           </div>
-          <div className="flex rounded-full bg-cda-grey p-1" role="group" aria-label="Video layout">
-            {ORIENTATIONS.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setOrientation(option.value)}
-                aria-pressed={orientation === option.value}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                  orientation === option.value ? "bg-white text-cda-dark shadow-sm" : "text-cda-text hover:text-cda-dark"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap justify-center gap-2">
+            <div className="flex rounded-full bg-cda-grey p-1" role="group" aria-label="Video layout">
+              {ORIENTATIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setOrientation(option.value)}
+                  aria-pressed={orientation === option.value}
+                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    orientation === option.value ? "bg-white text-cda-dark shadow-sm" : "text-cda-text hover:text-cda-dark"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <LanguagePicker value={language} onChange={onLanguageChange} />
           </div>
           {error && <p className="text-sm text-cda-red-dark">{error}</p>}
           <button
