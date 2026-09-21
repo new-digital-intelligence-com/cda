@@ -11,7 +11,7 @@ export type ChatMessage = {
   attachments?: Attachment[];
 };
 
-export type AssistantMode = "chat" | "voice" | "avatar";
+export type AssistantMode = "chat" | "voice" | "avatar" | "aida";
 
 export type AvatarOrientation = "horizontal" | "vertical";
 

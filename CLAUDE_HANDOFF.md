@@ -22,7 +22,8 @@ for staff, and Aida rooms draft answers for staff on live calls.
 | Email cda_domestic_appliances@new-digital-intelligence.com | ✅ Live (21 Sep) | Gmail push → web app → Ellie's "CDA email" Custom Channel → sent, or a Gmail draft (`email_mode` on Aida). Freshdesk no longer used |
 | Instagram DMs @new_digital_intelligence | ✅ Live (new account + new Meta app, 21 Sep) | Make.com scenarios + ElevenLabs Custom Channel |
 | Hosted web page / QR code | ✅ Live | ElevenLabs talk-to link (not password protected) |
-| **This web app** (chat, file upload, voice, video avatar, channel links) | ✅ Live | Next.js on Vercel: https://cda-demo.vercel.app (password protected) |
+| **This web app** (chat, file upload, voice, video avatar, Aida calls, channel links) | ✅ Live | Next.js on Vercel: https://cda-demo.vercel.app (site password) — customers only |
+| **Admin page** `/admin` (Aida rooms, email switch, customers + Claude insights) | ✅ Live (21 Sep) | Same app, behind the Aida staff password — staff only |
 | Video avatar (Avatar tab) | ✅ Live | **Anam** avatar "Sofia" (the user's own Ellie picture) joined to the ElevenLabs agent |
 | Slack (bot "CDA_Support") | ⏳ In progress | Native ElevenLabs Slack integration, own Slack app (see §5) |
 | WhatsApp, phone number | ⏸ Parked | See CHANNEL_SETUP.md §14 |
@@ -68,6 +69,7 @@ Create `.env.local` (git-ignored). Copy the values from **Vercel → project `cd
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` | Gmail API access to the CDA mailbox (email channel, server only) |
 | `GMAIL_PUBSUB_TOPIC` / `GMAIL_PUSH_SECRET` / `CRON_SECRET` | Gmail push topic, the secret in the Pub/Sub push URL, and the daily cron's secret |
 | `EMAIL_CHANNEL_INBOUND_URL` / `EMAIL_CHANNEL_INBOUND_SECRET` / `EMAIL_CHANNEL_SIGNING_SECRET` | Ellie's "CDA email" Custom Channel trigger |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude Haiku (`claude-haiku-4-5`) for the customer insights on `/admin` |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project for Aida rooms (server only) |
 | `AIDA_AGENT_ID` | The Aida copilot agent, `agent_2601m31rbrn8emrbfe8vgxgxdta9` |
 | `AIDA_STAFF_PASSWORD` | Aida's own staff password; the site password does **not** make anyone staff |
@@ -100,7 +102,12 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
 
 **Web app** (Next.js 16 – read `node_modules/next/dist/docs/` before using unfamiliar APIs; see AGENTS.md)
 - `src/proxy.ts` + `src/lib/auth.ts`: password lock on every page and API route
-- `src/components/AssistantApp.tsx`: tabs Chat / Voice / Avatar
+- `src/components/AssistantApp.tsx`: tabs Chat / Voice / Avatar / **Aida** (the customer side of
+  Aida rooms: join with a code or open a room; always a customer there)
+- **`/admin`** (`src/app/admin/`, `src/components/admin/`, `src/app/api/admin/*`, `src/lib/adminData.ts`,
+  `src/lib/anthropic.ts`): staff only, Aida staff password. Tabs Aida rooms (the old lobby) /
+  Customers (list, channels, history, Claude Haiku insights per customer and for the week; nothing
+  stored) / Email (auto/draft switch). `/aida` redirects there. CHANNEL_SETUP.md §18
 - `src/app/api/elevenlabs/*`: signed URL (chat) and conversation token (voice)
 - `src/app/api/anam/session/route.ts` + `src/components/AvatarPanel.tsx`: Anam avatar. The server gets an ElevenLabs signed URL and creates an Anam session token (`avatarModel: cara-4`, `maxSessionLengthSeconds`, `directorNotes` warm 0.5, `sessionOptions` 1152×768 or 768×1152, `environment.elevenLabsAgentSettings`). Anam Lab stores **no** ElevenLabs link; the "Olivia" persona in Lab is not used
 - `src/components/ChannelLinks.tsx`: Email (Gmail compose), Telegram and Instagram buttons (Instagram opens @new_digital_intelligence)
@@ -155,6 +162,10 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
    `data[].event.agent_response`; Ellie copied the email header into her reply). No new agent:
    Ellie answers, Aida only stores `email_mode`. Still to do: **remove the Freshdesk trigger from
    Ellie** (Channels → Freshdesk) so nobody gets two answers.
+
+0c. **Customer site / admin split** – 21 Sep 2026. `/` is customers only (site password, Aida tab);
+   `/admin` is staff (Aida staff password). 17 local checks passed, including one real Claude
+   insight per endpoint. `ANTHROPIC_API_KEY` + `ANTHROPIC_MODEL` must also be on Vercel.
 
 0b. **Aida rooms** – built, Aida agent created, tables created, LiveKit project connected
    (`wss://test-o70a5e7x.livekit.cloud`). All 45 route checks pass locally: roles, forged tickets,

@@ -2,6 +2,7 @@
 
 import { ConversationProvider, useConversation } from "@elevenlabs/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AidaJoin } from "./aida/AidaJoin";
 import { AvatarPanel } from "./AvatarPanel";
 import { EmailTranscriptForm, postEmail } from "./EmailTranscriptForm";
 import { MessageBubble, TypingIndicator } from "./MessageBubble";
@@ -28,6 +29,7 @@ const TAB_LABELS: Record<AssistantMode, string> = {
   chat: "💬 Chat",
   voice: "🎙️ Voice",
   avatar: "🧑‍💼 Avatar",
+  aida: "📞 Aida",
 };
 
 export default function AssistantApp() {
@@ -230,13 +232,13 @@ function Assistant() {
     <section className="flex min-h-[640px] flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-cda-grey px-4 py-3">
         <div className="flex rounded-full bg-cda-grey p-1" role="tablist" aria-label="Assistant mode">
-          {(["chat", "voice", "avatar"] as const).map((item) => (
+          {(["chat", "voice", "avatar", "aida"] as const).map((item) => (
             <button
               key={item}
               role="tab"
               aria-selected={mode === item}
               onClick={() => switchMode(item)}
-              className={`rounded-full px-5 py-1.5 text-sm font-semibold transition ${
+              className={`rounded-full px-3 py-1.5 text-sm font-semibold transition sm:px-5 ${
                 mode === item ? "bg-cda-red text-white shadow" : "text-cda-ink hover:text-cda-dark"
               }`}
             >
@@ -244,7 +246,7 @@ function Assistant() {
             </button>
           ))}
         </div>
-        {mode !== "avatar" && <StatusPill status={status} />}
+        {(mode === "chat" || mode === "voice") && <StatusPill status={status} />}
       </div>
 
       {error && (
@@ -442,8 +444,13 @@ function Assistant() {
             </div>
           )}
         </div>
-      ) : (
+      ) : mode === "avatar" ? (
         <AvatarPanel />
+      ) : (
+        // A live call with CDA staff. From here someone is always a customer: the staff side is /admin.
+        <div className="flex-1 overflow-y-auto bg-cda-grey-light p-4">
+          <AidaJoin initialCode="" />
+        </div>
       )}
     </section>
   );

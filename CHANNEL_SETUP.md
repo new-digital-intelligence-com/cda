@@ -29,6 +29,7 @@ Last updated: **21 September 2026**
 15. [Troubleshooting and lessons learned](#15-troubleshooting-and-lessons-learned)
 16. [Cross-channel customer memory](#16-cross-channel-customer-memory)
 17. [Aida rooms (live calls with an AI copilot)](#17-aida-rooms-live-calls-with-an-ai-copilot)
+18. [Admin page (staff)](#18-admin-page-staff)
 
 ---
 
@@ -348,7 +349,7 @@ Under **Ellie** in Gmail's side bar:
 The switch is the dynamic variable placeholder **`email_mode`** on the agent **Aida – CDA copilot**
 (`auto` or `draft`; anything unreadable counts as `draft`). It is read again for every reply.
 
-- **Website**: `/aida` → staff password → **Email replies** card → *Send automatically* / *Draft for
+- **Website**: `/admin` → staff password → **Email** tab → *Send automatically* / *Draft for
   staff*. The card also lists the latest emails with what happened to each and an "Open in Gmail" link
 - **Claude** with the ElevenLabs connector: *"Set the dynamic variable placeholder email_mode on the
   agent Aida – CDA copilot to draft"* (or `auto`)
@@ -364,7 +365,7 @@ and nothing in her prompt uses it.
 | `POST /api/email/gmail-push` | Google Pub/Sub | `?token=` = `GMAIL_PUSH_SECRET` |
 | `POST /api/email/ellie-reply` | ElevenLabs (Custom Channel replies) | HMAC signature, `EMAIL_CHANNEL_SIGNING_SECRET` |
 | `GET /api/email/gmail-watch` | Vercel Cron, daily at 06:00 UTC (`vercel.json`) | `Bearer CRON_SECRET` (or `GMAIL_PUSH_SECRET` by hand) |
-| `GET/POST /api/email/mode` | The staff card on `/aida` | Aida staff token |
+| `GET/POST /api/email/mode` | The **Email** tab on `/admin` | Aida staff token |
 
 All four are exempt from the site password in `src/proxy.ts`. Gmail stops posting 7 days after a
 watch starts, so the daily cron renews it and also catches up on anything a missed notification
@@ -455,6 +456,10 @@ If used on a real site, add the domain in **Security → Allowlist**.
 - **File upload**: images (PNG/JPG/WEBP/GIF) and PDFs, max 3 per message, 10 MB each (`uploadFile` + `sendMultimodalMessage`)
 - **Voice**: real-time WebRTC, animated orb, mute, end call, live transcript
 - **Avatar**: Anam video call with our own Ellie face and live captions, max 3 minutes per call (see section 9)
+- **Aida**: the fourth tab. A customer joins a live call with CDA staff with a room code, or opens a
+  new room for staff to join (section 17). Anyone here is always a **customer**; staff work from `/admin`
+- **Admin page** `/admin` (not linked from the customer site): staff only, behind the Aida staff
+  password — Aida rooms, the email reply switch, and customers with AI insights (section 18)
 - **Other channels card**: buttons that open Email (Gmail compose to the support address), the Telegram bot and an Instagram DM (`src/components/ChannelLinks.tsx`)
 - **Your CDA account**: create an account and link Telegram, email and other channels to it with a
   short code, so Ellie recognises the same person everywhere (section 16)
@@ -477,7 +482,7 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `src/app/api/anam/session/route.ts` | Creates the Anam session token joined to Ellie (both API keys stay on the server) |
 | `src/proxy.ts`, `src/lib/auth.ts`, `src/app/login/` | Password lock |
 | `src/lib/emailInbox.ts`, `src/lib/gmail.ts`, `src/lib/emailParse.ts`, `src/lib/emailMode.ts`, `src/app/api/email/` | The email channel (section 5) |
-| `src/components/aida/EmailModeCard.tsx` | Staff switch between sending and drafts, and the latest emails (on `/aida`) |
+| `src/components/aida/EmailModeCard.tsx` | Staff switch between sending and drafts, and the latest emails (the **Email** tab on `/admin`) |
 | `vercel.json` | Daily cron that renews the Gmail watch |
 
 ### Environment variables (Vercel → Settings → Environment Variables, and `.env.local` locally)
@@ -510,6 +515,8 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `EMAIL_CHANNEL_INBOUND_URL` | Inbound Webhook URL of Ellie's "CDA email" Custom Channel trigger |
 | `EMAIL_CHANNEL_INBOUND_SECRET` | That trigger's Inbound Secret (sent as `X-Webhook-Secret`) |
 | `EMAIL_CHANNEL_SIGNING_SECRET` | That trigger's Outbound Signing Secret (checks Ellie's replies) |
+| `ANTHROPIC_API_KEY` | Anthropic API key for the AI insights on `/admin` (section 18) — server only |
+| `ANTHROPIC_MODEL` | `claude-haiku-4-5` (small and fast; the code default is the same) |
 
 After changing a variable on Vercel → **Redeploy**.
 
@@ -804,6 +811,7 @@ Example prompts:
 | Google OAuth client secret + Gmail refresh token | Vercel env vars, `.env.local` | Full access to the CDA mailbox. The client secret was shared in chat → reset it in Google Cloud → Credentials after the demo, then run the consent again |
 | `GMAIL_PUSH_SECRET`, `CRON_SECRET` | Vercel env vars, `.env.local`; the push secret is also in the Pub/Sub subscription URL | Generated randomly |
 | Email Custom Channel secrets (inbound + signing) | ElevenLabs "CDA email" trigger, Vercel env vars, `.env.local` | Shared in chat → regenerate after the demo |
+| Anthropic API key | Vercel env vars, `.env.local` | Only for the insights on `/admin`; costs a fraction of a cent per insight |
 | Google Drive access | ElevenLabs Google Drive integration | Read-only, picked files only |
 | Custom Channel secrets (input/output) | ElevenLabs trigger; input secret in Make HTTP header | |
 | Instagram access token | Make scenario "IG – Ellie reply out" (Authorization header); a copy in `.env.local` (`INSTAGRAM_ACCESS_TOKEN`, not used by the web app) for API checks | **Expires every 60 days** (current one ~20 Nov 2026). Shared in chat |
@@ -891,11 +899,11 @@ enough for a demo but not for real traffic.
 | Instagram DMs don't arrive | Meta app must be **Published** (needs a privacy policy URL) |
 | Freshdesk replies twice | Freshdesk's own AI agent (Freddy) is on → keep it off (Freshdesk is no longer used for email) |
 | An email gets no reply and no Ellie label | Watch lapsed or Pub/Sub not delivering: open `/api/email/gmail-watch` with the push secret (section 5), then check Vercel's function logs for `gmail-push` |
-| Email labelled **Ellie/Failed** | Ellie or Gmail could not be reached; the reason is on the staff card on `/aida`. Answer it by hand. "Google sign-in failed: invalid_grant" in the logs → run the Gmail consent again |
+| Email labelled **Ellie/Failed** | Ellie or Gmail could not be reached; the reason is on the **Email** tab of `/admin`. Answer it by hand. "Google sign-in failed: invalid_grant" in the logs → run the Gmail consent again |
 | A customer's email labelled **Ellie/Skipped** | A rule or Ellie took it for a robot; the reason is on the staff card. Answer it by hand, and adjust the rules in `src/lib/emailParse.ts` if it keeps happening |
 | A customer gets two answers to one email | The old Freshdesk trigger is still on Ellie → remove it |
 | Ellie's email reply starts with `[Email to CDA customer care]`, `From:`, `Subject:` | She copied the header she was given. Her prompt asks for the body only and the web app strips those lines (fixed 21 Sep) |
-| `email_mode` is not in the Aida dashboard's **Vars** panel | Expected: the panel only lists variables used as `{{…}}` in the agent. It exists (check through the API); change it on `/aida` or through Claude |
+| `email_mode` is not in the Aida dashboard's **Vars** panel | Expected: the panel only lists variables used as `{{…}}` in the agent. It exists (check through the API); change it on `/admin` (Email tab) or through Claude |
 | Ellie's email answer is in ElevenLabs but never sent; the email stays "Ellie is writing…" | The reply webhook's text is at `data[].event.agent_response`, not `data[].agent_response` (the first live test on 21 Sep hit exactly this; fixed). ElevenLabs shows `delivery_status: success` because the route answered 200 |
 | Voice widget test error "draft_from_user_id" | Use the **Inline** test mode or refresh the page |
 | Avatar call fails to start | The real reason is in the browser console (F12 → Console) and the Vercel function logs. Check the `ANAM_*` variables, that the agent's input format is PCM 16000 Hz, and the Anam plan's call length (old LiveAvatar lesson: `max_session_duration (180s) exceeds the maximum allowed (120s)`) |
@@ -1074,11 +1082,11 @@ The role comes from **how you got in**, never from what you type. The name is on
 
 | | Gets in with | Sees |
 |---|---|---|
-| **CDA employee** | The **Aida staff password** (`AIDA_STAFF_PASSWORD`) on `/aida` → the lobby: create, list, join | Everything, including Aida's drafts and Approve / Edit / Decline |
-| **Customer** | A room code or invite link → `/aida/join`, no password at all | Talk, chat and the transcript. **Never** the drafts |
+| **CDA employee** | The **Aida staff password** (`AIDA_STAFF_PASSWORD`) on **`/admin`** → the **Aida rooms** tab: create, list, join, close | Everything, including Aida's drafts and Approve / Edit / Decline |
+| **Customer** | The **📞 Aida** tab on the main site (behind the site password), or an invite link → `/aida/join` (no password at all). Join with a code or open a new room | Talk, chat and the transcript. **Never** the drafts |
 
 Aida has **its own password**, separate from the site password: knowing the site password does
-**not** make anyone staff. `/aida` and `/aida/join` are open past the site lock.
+**not** make anyone staff. `/admin`, `/aida` (now only a redirect to `/admin`) and `/aida/join` are open past the site lock.
 
 The staff sign-in is a signed token kept **per browser tab** (sessionStorage) and sent in the
 `x-aida-staff` header, not a cookie. Changing `AIDA_STAFF_PASSWORD` signs every staff tab out.
@@ -1125,7 +1133,7 @@ does not spend transcription minutes.
 | Prompt | Her own copilot rules, plus Ellie's "Company context", "Knowledge rules", "Safety" and "Handover to a human" sections |
 | Mode | Text only, no first message, session limit 1 hour (the host reconnects her automatically) |
 | Tools / webhook / channels | **None** |
-| Dynamic variables | Only the placeholder `email_mode` (`auto` / `draft`): the switch for Ellie's email replies (section 5). Nothing in Aida's prompt uses it, so the dashboard's **Vars** panel does not list it; read or change it through the API, the staff card on `/aida` or Claude |
+| Dynamic variables | Only the placeholder `email_mode` (`auto` / `draft`): the switch for Ellie's email replies (section 5). Nothing in Aida's prompt uses it, so the dashboard's **Vars** panel does not list it; read or change it through the API, the Email tab on `/admin` or Claude |
 
 She was **created fresh**, not with ElevenLabs' "duplicate agent": a duplicate could carry Ellie's
 Telegram or email triggers, and two agents on one channel is how Telegram broke before. Ellie was
@@ -1167,7 +1175,7 @@ People talking to people through LiveKit uses **no** ElevenLabs voice credits.
 2. LiveKit Cloud → new project → copy the URL, API key and API secret
 3. Add `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `AIDA_AGENT_ID` and
    `AIDA_STAFF_PASSWORD` to `.env.local` **and** Vercel → Redeploy
-4. Test: `/aida` → staff password → Create room → Copy invite link → open it in a **new tab** as the
+4. Test: `/admin` → staff password → Aida rooms → Create room → Copy invite link → open it in a **new tab** as the
    customer. Headphones on both sides give the cleanest transcript.
 
 ### After a room ends
@@ -1202,3 +1210,71 @@ If the customer's browser is signed in to their CDA account on the website (sect
 
 `aida_rooms.customer_id` was added after the table: run `supabase/schema.sql` again. Until then
 everything else works and the room simply has no known customer.
+
+---
+
+## 18. Admin page (staff)
+
+`https://cda-demo.vercel.app/admin` — the staff side of the demo, apart from the customer site.
+
+| | Customer site `/` | Admin page `/admin` |
+|---|---|---|
+| Password | The site password (`SITE_PASSWORD`) | The **Aida staff password** (`AIDA_STAFF_PASSWORD`); the site password does not open it |
+| For | Customers: Chat, Voice, Avatar, **Aida** (join a live call with a code, or open a room) | CDA staff |
+| Linked from the other | No | No |
+
+The staff sign-in is kept **per browser tab** (sessionStorage), as before. `/aida` now simply
+forwards to `/admin`; invite links (`/aida/join?code=…`) are unchanged.
+
+### Tabs
+
+| Tab | What staff can do |
+|---|---|
+| **📞 Aida rooms** | Everything the old `/aida` lobby did: create, join, close rooms, read and email closed ones (section 17) |
+| **👥 Customers** | See every customer, their channels and history, and ask Claude for insights (below) |
+| **✉️ Email** | Switch email replies between *Send automatically* and *Draft for staff*, and see the latest emails (section 5) |
+
+Tabs stay open once visited, so moving to Customers during a call does not drop anyone out of it.
+
+### Customers tab
+
+- **Numbers at the top**: customers, with a CDA account, on 2+ channels, active this week, active
+  now (a conversation started under 15 minutes ago), open Aida rooms; customers per channel;
+  conversations this week per channel; what happened to emails (replied, drafts, skipped, failed)
+- **What customers asked this week** — ✨ *Summarise with Claude*: Claude reads the last 7 days of
+  conversation notes and email subjects on every channel and returns a summary, top topics, common
+  problems, products mentioned and ideas for CDA (e.g. a knowledge gap to fill)
+- **The list**: search by name, email or Telegram chat; filters *Known people* (anyone with more
+  than an anonymous browser cookie), *With account*, *Active this week*, *Everyone*; sorted by last
+  activity, with a green dot for "active now"
+- **One customer**: channels (✓ = verified), conversations per channel, notes, emails and live calls,
+  one timeline of everything, and ✨ *Ask Claude*: a short summary, topics, products, mood with a
+  reason, what is not resolved yet, flags (complaint, safety, repeated contact…) and one next step for staff
+
+Website "channels" are browser cookies, so only their first 6 characters are shown.
+
+### How the insights work
+
+- Claude **Haiku** (`ANTHROPIC_MODEL=claude-haiku-4-5`) through the Anthropic API (`src/lib/anthropic.ts`),
+  temperature 0, told to use only the data given and to say so when it is thin
+- For one customer it gets their notes, emails, Aida rooms, conversation counts and the transcripts of
+  their **last 3 conversations** (read free from ElevenLabs). For the week, the last 7 days of notes
+  and email subjects
+- Made only when a staff member clicks, and **nothing is stored**. A few seconds each, a fraction of a
+  cent. Without `ANTHROPIC_API_KEY` the buttons say so and everything else works
+- Privacy: customer notes and transcripts are sent to Anthropic for these insights. Fine for a demo
+  with fake customers; for real customers it belongs in the privacy notice
+
+### The routes
+
+| Route | What |
+|---|---|
+| `GET /api/admin/customers` | The list and the numbers |
+| `GET /api/admin/customers/{id}` | One customer: channels, notes, conversations, emails, rooms |
+| `POST /api/admin/customers/{id}/insight` | Claude's insight on that customer |
+| `POST /api/admin/insights` | Claude's summary of the week |
+
+All need the Aida staff token (`x-aida-staff`) and are exempt from the site password in
+`src/proxy.ts`, like `/api/aida/*`. They only read (`src/lib/adminData.ts`). Checked locally on
+21 Sep 2026: every route refuses a missing, fake or site-password-only request; `/` still asks for the
+site password; `/aida` forwards to `/admin`; `/aida/join` stays open; both Claude answers parse.

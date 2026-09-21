@@ -1,19 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AidaHistory } from "./AidaHistory";
 import { AidaRoom } from "./AidaRoom";
-import { EmailModeCard } from "./EmailModeCard";
-import {
-  rememberName,
-  rememberStaffToken,
-  RoomClosedError,
-  requestRoom,
-  savedName,
-  savedStaffToken,
-  type JoinedRoom,
-} from "./types";
+import { rememberName, RoomClosedError, requestRoom, savedName, type JoinedRoom } from "./types";
 
 type OpenRoom = {
   code: string;
@@ -29,41 +19,11 @@ type RoomLists = { open: OpenRoom[]; closed: OpenRoom[] };
 const REFRESH_MS = 10_000;
 
 /**
- * The staff side of Aida. The Aida staff password is asked for first, and only in this tab: open
- * an invite link in a new tab and you are a customer there, which is how to test both sides.
+ * The staff password screen of the admin page (/admin). The Aida staff password is asked for once
+ * per browser tab: open an invite link in a new tab and you are a customer there, which is how to
+ * test both sides.
  */
-export function AidaLobby() {
-  const [staffToken, setStaffToken] = useState<string | null>(null);
-  const [checked, setChecked] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setStaffToken(savedStaffToken());
-      setChecked(true);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const signOut = useCallback(() => {
-    rememberStaffToken(null);
-    setStaffToken(null);
-  }, []);
-
-  if (!checked) return null;
-  if (!staffToken) {
-    return (
-      <StaffSignIn
-        onSignedIn={(token) => {
-          rememberStaffToken(token);
-          setStaffToken(token);
-        }}
-      />
-    );
-  }
-  return <Lobby staffToken={staffToken} onSignOut={signOut} />;
-}
-
-function StaffSignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
+export function StaffSignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -100,12 +60,11 @@ function StaffSignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-3xl gap-4 md:grid-cols-2">
+    <div className="mx-auto w-full max-w-md">
       <form onSubmit={submit} className="space-y-3 rounded-xl bg-white p-6 shadow-sm">
         <h1 className="text-xl font-bold text-cda-dark">CDA staff</h1>
         <p className="text-sm text-cda-text">
-          Enter the Aida staff password. In the room you will see Aida&apos;s suggested answers and decide
-          what is sent to the customer.
+          Enter the staff password to manage Aida rooms, email replies and customers.
         </p>
         <input
           value={name}
@@ -133,24 +92,12 @@ function StaffSignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
           Sign in as staff
         </button>
       </form>
-
-      <div className="space-y-3 rounded-xl bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-bold text-cda-dark">Customer</h2>
-        <p className="text-sm text-cda-text">
-          No password needed. Join a call with a room code, or open a room and the CDA team will join you.
-        </p>
-        <Link
-          href="/aida/join"
-          className="block w-full rounded-lg border border-cda-red px-3 py-2 text-center text-sm font-semibold text-cda-red"
-        >
-          Continue as a customer
-        </Link>
-      </div>
     </div>
   );
 }
 
-function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () => void }) {
+/** The "Aida rooms" tab of the admin page: create, join, close and read rooms as CDA staff. */
+export function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () => void }) {
   const [joined, setJoined] = useState<JoinedRoom | null>(null);
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -265,17 +212,12 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
     <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
       <div className="space-y-4">
         <section className="space-y-4 rounded-xl bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h1 className="text-xl font-bold text-cda-dark">Aida rooms</h1>
-              <p className="mt-1 text-sm text-cda-text">
-                Live calls with a customer. Aida listens and drafts answers that only CDA staff see; you approve
-                what gets sent.
-              </p>
-            </div>
-            <button type="button" onClick={onSignOut} className="shrink-0 text-xs text-cda-text underline">
-              Sign out
-            </button>
+          <div>
+            <h1 className="text-xl font-bold text-cda-dark">Aida rooms</h1>
+            <p className="mt-1 text-sm text-cda-text">
+              Live calls with a customer. Aida listens and drafts answers that only CDA staff see; you approve
+              what gets sent.
+            </p>
           </div>
 
           <label className="block text-sm font-semibold text-cda-dark">
@@ -348,7 +290,6 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
 
           {error && <p className="text-sm text-cda-red">{error}</p>}
         </section>
-        <EmailModeCard staffToken={staffToken} />
       </div>
 
       <section className="space-y-4">

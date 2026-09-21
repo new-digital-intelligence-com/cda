@@ -25,6 +25,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // The staff admin page is behind the Aida staff password, not this one: the page asks for it,
+  // and every /api/admin/* route refuses a request without a valid staff token.
+  if (pathname === "/admin" || pathname.startsWith("/api/admin/")) return NextResponse.next();
+
   const isApi = pathname.startsWith("/api/");
   if (!sitePasswordConfigured()) {
     // Fail closed: without SITE_PASSWORD nothing is reachable.
