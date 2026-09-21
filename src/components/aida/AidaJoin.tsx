@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AidaRoom } from "./AidaRoom";
 import { rememberName, requestRoom, savedName, type JoinedRoom } from "./types";
 
@@ -10,7 +10,9 @@ export function AidaJoin({ initialCode }: { initialCode: string }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
+  const [nameMissing, setNameMissing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setName((current) => current || savedName()), 0);
@@ -20,7 +22,8 @@ export function AidaJoin({ initialCode }: { initialCode: string }) {
   async function enter(path: "/api/aida/rooms" | "/api/aida/join", body: Record<string, string>) {
     const cleanName = name.trim();
     if (!cleanName) {
-      setError("Please enter your name first.");
+      setNameMissing(true);
+      nameInputRef.current?.focus();
       return;
     }
     setBusy(true);
@@ -49,12 +52,19 @@ export function AidaJoin({ initialCode }: { initialCode: string }) {
       <label className="block text-sm font-semibold text-cda-dark">
         Your name
         <input
+          ref={nameInputRef}
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => {
+            setName(event.target.value);
+            setNameMissing(false);
+          }}
           maxLength={40}
           placeholder="e.g. Helmi"
-          className="mt-1 w-full rounded-lg border border-cda-grey px-3 py-2 text-sm font-normal"
+          className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm font-normal ${
+            nameMissing ? "border-cda-red ring-2 ring-cda-red/30" : "border-cda-grey"
+          }`}
         />
+        {nameMissing && <span className="mt-1 block text-sm font-normal text-cda-red">Enter your name first.</span>}
       </label>
 
       <form

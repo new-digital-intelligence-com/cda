@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AidaRoom } from "./AidaRoom";
 import {
   rememberName,
@@ -58,12 +58,23 @@ export function AidaLobby() {
 }
 
 function StaffSignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setName((current) => current || savedName()), 0);
+    return () => clearTimeout(timer);
+  }, []);
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    const cleanName = name.trim();
+    if (!cleanName) {
+      setError("Please enter your name.");
+      return;
+    }
     setBusy(true);
     setError(null);
     const response = await fetch("/api/aida/staff", {
@@ -77,6 +88,8 @@ function StaffSignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
       setError(body.error ?? "Could not sign in");
       return;
     }
+    // The name is asked here once, so every Join in the lobby just works.
+    rememberName(cleanName);
     onSignedIn(body.token);
   }
 
@@ -89,18 +102,26 @@ function StaffSignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
           what is sent to the customer.
         </p>
         <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Your name"
+          maxLength={40}
+          autoComplete="name"
+          autoFocus
+          className="w-full rounded-lg border border-cda-grey px-3 py-2 text-sm"
+        />
+        <input
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="Aida staff password"
           autoComplete="current-password"
-          autoFocus
           className="w-full rounded-lg border border-cda-grey px-3 py-2 text-sm"
         />
         {error && <p className="text-sm text-cda-red">{error}</p>}
         <button
           type="submit"
-          disabled={busy || !password}
+          disabled={busy || !password || !name.trim()}
           className="w-full rounded-lg bg-cda-red px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
           Sign in as staff
@@ -130,7 +151,9 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
   const [code, setCode] = useState("");
   const [rooms, setRooms] = useState<OpenRoom[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [nameMissing, setNameMissing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const loadRooms = useCallback(async () => {
     const response = await fetch("/api/aida/rooms", { headers: { "x-aida-staff": staffToken } });
@@ -164,7 +187,9 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
   async function enter(path: "/api/aida/rooms" | "/api/aida/join", body: Record<string, string>) {
     const cleanName = name.trim();
     if (!cleanName) {
-      setError("Please enter your name first.");
+      // Point at the box itself: a message somewhere else on the page is easy to miss.
+      setNameMissing(true);
+      nameInputRef.current?.focus();
       return;
     }
     setBusy(true);
@@ -213,12 +238,19 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
         <label className="block text-sm font-semibold text-cda-dark">
           Your name
           <input
+            ref={nameInputRef}
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setName(event.target.value);
+              setNameMissing(false);
+            }}
             maxLength={40}
             placeholder="e.g. Sarah"
-            className="mt-1 w-full rounded-lg border border-cda-grey px-3 py-2 text-sm font-normal"
+            className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm font-normal ${
+              nameMissing ? "border-cda-red ring-2 ring-cda-red/30" : "border-cda-grey"
+            }`}
           />
+          {nameMissing && <span className="mt-1 block text-sm font-normal text-cda-red">Enter your name to join or create a room.</span>}
         </label>
 
         <form
