@@ -1,5 +1,4 @@
-// Customer memory shared by every channel. Tables live in Supabase (see supabase/schema.sql) and
-// are reached over its REST API, so no extra npm package is needed.
+// Customer memory shared by every channel. Tables live in Supabase (see supabase/schema.sql).
 //
 // A customer is a person. Every way of reaching them - a Telegram chat, an email address, an
 // Instagram sender id, a website cookie - is a row in customer_channels, so one person can have
@@ -8,6 +7,8 @@
 // Ellie never asks anyone to identify themselves. A channel becomes linked either automatically
 // (its id is inside the conversation id) or because the person signed in on the website and sent
 // the short code from that channel.
+
+import { supabaseConfigured, supabaseRest as rest } from "./supabase";
 
 export const CHANNELS = ["telegram", "instagram", "email", "website", "slack"] as const;
 export type Channel = (typeof CHANNELS)[number];
@@ -19,40 +20,7 @@ export type LinkedChannel = { channel: Channel; channel_key: string; verified: b
 /** What the agent is told. Deliberately no addresses, order numbers or other personal details. */
 export type Profile = { name: string | null; channels: Channel[]; verified: boolean; recent: string[] };
 
-function credentials() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env.local");
-  }
-  return { url: url.replace(/\/+$/, ""), key };
-}
-
-export function customerStoreConfigured(): boolean {
-  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
-}
-
-async function rest<T>(path: string, init: RequestInit & { prefer?: string } = {}): Promise<T> {
-  const { url, key } = credentials();
-  const { prefer, ...options } = init;
-  const response = await fetch(`${url}/rest/v1/${path}`, {
-    ...options,
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      ...(prefer ? { Prefer: prefer } : {}),
-      ...init.headers,
-    },
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    throw new Error(`Supabase ${path} failed with ${response.status}: ${await response.text()}`);
-  }
-  // `return=minimal` answers 201 with an empty body, which response.json() would choke on.
-  const body = await response.text();
-  return (body ? JSON.parse(body) : undefined) as T;
-}
+export const customerStoreConfigured = supabaseConfigured;
 
 const q = encodeURIComponent;
 

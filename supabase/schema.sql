@@ -8,15 +8,10 @@
 -- Channels are linked either automatically (the id is in the conversation id) or by the person
 -- themselves: they sign in on the website, get a short code, and send it from the channel.
 
-create extension if not exists "pgcrypto";
+-- Safe to run again at any time: every statement only creates what is missing and never drops or
+-- changes existing data.
 
--- Safe to run as-is: these tables hold demo data only, and the email address moved out of
--- `customers` into `customer_channels`, so the old shape cannot simply be altered in place.
-drop table if exists customer_notes cascade;
-drop table if exists customer_conversations cascade;
-drop table if exists link_codes cascade;
-drop table if exists customer_channels cascade;
-drop table if exists customers cascade;
+create extension if not exists "pgcrypto";
 
 create table if not exists customers (
   id           uuid primary key default gen_random_uuid(),
@@ -75,3 +70,41 @@ alter table customer_channels      enable row level security;
 alter table link_codes             enable row level security;
 alter table customer_conversations enable row level security;
 alter table customer_notes         enable row level security;
+
+-- ---------------------------------------------------------------------------------------------
+-- Aida: live rooms where CDA employees and a customer talk, with Aida drafting replies that only
+-- the employees see. Voice and chat travel through LiveKit; these tables keep the record.
+-- ---------------------------------------------------------------------------------------------
+
+create table if not exists aida_rooms (
+  id              uuid primary key default gen_random_uuid(),
+  code            text not null unique,        -- what people type to join, e.g. 4F2K9M
+  title           text,
+  created_by_role text not null,               -- employee | customer
+  created_by_name text,
+  status          text not null default 'open', -- open | closed
+  created_at      timestamptz not null default now(),
+  expires_at      timestamptz not null,
+  closed_at       timestamptz
+);
+
+create index if not exists aida_rooms_open_idx on aida_rooms (status, created_at desc);
+
+-- Everything said, typed, suggested and decided in a room, in order. The author comes from the
+-- signed room ticket on the server, never from what the browser claims.
+create table if not exists aida_events (
+  id              bigint generated always as identity primary key,
+  room_id         uuid not null references aida_rooms (id) on delete cascade,
+  kind            text not null,               -- speech | chat | suggestion | approved | declined
+  author_identity text not null,
+  author_name     text,
+  author_role     text not null,               -- employee | customer
+  text            text,
+  ref             text,                        -- the suggestion an approval or decline belongs to
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists aida_events_room_idx on aida_events (room_id, id);
+
+alter table aida_rooms  enable row level security;
+alter table aida_events enable row level security;

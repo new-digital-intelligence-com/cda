@@ -1,3 +1,4 @@
+import Link from "next/link";
 import AssistantApp from "@/components/AssistantApp";
 import { AccountPanel } from "@/components/AccountPanel";
 import { ChannelLinks } from "@/components/ChannelLinks";
@@ -24,6 +25,9 @@ export default function Home() {
             <span className="text-lg font-semibold">Customer Assistant</span>
           </div>
           <div className="flex items-center gap-4">
+            <Link href="/aida" className="rounded-full bg-cda-red px-3 py-1 text-xs font-semibold text-white hover:bg-cda-red-dark">
+              Aida rooms
+            </Link>
             <a
               href="https://www.cda.co.uk/customer-care/"
               target="_blank"

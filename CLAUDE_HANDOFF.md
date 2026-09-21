@@ -64,6 +64,8 @@ Create `.env.local` (git-ignored). Copy the values from **Vercel → project `cd
 | `AGENT_TOOL_SECRET` | Secret the agent's tools send in `x-cda-agent-secret` |
 | `ELEVENLABS_WEBHOOK_SECRET` | Signing secret of the post-call webhook |
 | `FRESHDESK_API_KEY` / `FRESHDESK_SUBDOMAIN` | Used to find who wrote an email ticket |
+| `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project for Aida rooms (server only) |
+| `AIDA_AGENT_ID` | The Aida copilot agent, `agent_2601m31rbrn8emrbfe8vgxgxdta9` |
 
 ```bash
 npm run dev      # http://localhost:3000
@@ -104,6 +106,11 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
     accounts on Supabase Auth, and the panel where a channel is linked with a code
   - `src/lib/websiteSession.ts`: chat, voice and the avatar register their conversation server-side,
     because a website-only dynamic variable would break every other channel
+- **Aida rooms** (CHANNEL_SETUP.md §17): live calls between staff and a customer on LiveKit, each
+  browser transcribing its own mic with Scribe, and the Aida agent drafting replies only staff see
+  (approve → sent in the chat). `src/app/aida/`, `src/components/aida/`, `src/app/api/aida/*`,
+  `src/lib/aida.ts`, `src/lib/livekit.ts`. The customer page `/aida/join` and `/api/aida/*` are open
+  past the site password; the site password is what makes someone staff
 - Vercel deploys `main` automatically; after changing env vars on Vercel, redeploy
 
 **Anam** (free plan: 30 min/month, 3-min calls, 1 custom avatar) – avatar Sofia, Cara 4, supports horizontal and vertical.
@@ -125,6 +132,10 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
    - Weak spot: Telegram and email identity rely on the undocumented `_tg_` / `_fd_` endings of the
      conversation id
 
+0b. **Aida rooms** – code written, builds, lints; the Aida agent is created. Not yet tested live.
+   Needs: the user runs `supabase/schema.sql` again (now safe to re-run), a LiveKit Cloud project
+   (URL + key + secret), and the four `LIVEKIT_*` / `AIDA_AGENT_ID` variables in `.env.local` and Vercel.
+   Then test the routes locally (free), and the user tests a real call (costs Scribe + Aida text).
 1. **Slack** – waiting for the user:
    - The "New Digital Intelligence" Slack workspace hit the free plan's 10-app limit → use a new demo workspace or remove an unused app.
    - User creates the **CDA_Support** app from the manifest in CHANNEL_SETUP.md §10, installs it, and gives the **Bot User OAuth Token** + **Signing Secret** and the mode (mention-only or all messages).

@@ -28,6 +28,7 @@ Last updated: **18 September 2026**
 14. [Parked / not yet built](#14-parked--not-yet-built)
 15. [Troubleshooting and lessons learned](#15-troubleshooting-and-lessons-learned)
 16. [Cross-channel customer memory](#16-cross-channel-customer-memory)
+17. [Aida rooms (live calls with an AI copilot)](#17-aida-rooms-live-calls-with-an-ai-copilot)
 
 ---
 
@@ -371,6 +372,9 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `ELEVENLABS_WEBHOOK_SECRET` | Signing secret of the post-call webhook (section 16) |
 | `FRESHDESK_API_KEY` | Freshdesk API key, used to find who wrote an email ticket (section 16) |
 | `FRESHDESK_SUBDOMAIN` | `newdigitalintelligence-help` |
+| `LIVEKIT_URL` | LiveKit Cloud project URL, `wss://….livekit.cloud` (Aida rooms, section 17) |
+| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project key and secret — server only |
+| `AIDA_AGENT_ID` | `agent_2601m31rbrn8emrbfe8vgxgxdta9`, the Aida copilot agent |
 
 After changing a variable on Vercel → **Redeploy**.
 
@@ -888,3 +892,103 @@ customers only**. Linking by code proves the channel belongs to the account, whi
 address never did. The prompt still makes Ellie confirm one detail before revealing anything
 personal. The service role key is server-side only and must never be committed: this repository is
 public.
+
+---
+
+## 17. Aida rooms (live calls with an AI copilot)
+
+A live call on the website between CDA staff and a customer. Everyone can **talk or type**, the
+call is **transcribed live**, and **Aida** — a second ElevenLabs agent — drafts a reply to every
+customer message. **Only staff see the drafts**; an employee approves (the reply appears in the chat
+as "CDA Support"), edits, or declines. This is the parked "Copilot mode", done as live rooms.
+
+### Who is who
+
+The role comes from **how you got in**, never from what you type. The name is only a label.
+
+| | Gets in with | Sees |
+|---|---|---|
+| **CDA employee** | The site password → `/aida` (the lobby: create, list, join) | Everything, including Aida's drafts and Approve / Edit / Decline |
+| **Customer** | A room code or invite link → `/aida/join` (public, no site password) | Talk, chat and the transcript. **Never** the drafts |
+
+The server writes the role into the LiveKit ticket. LiveKit does not let a participant change its
+own attributes, so every browser can trust `participant.attributes.role`. A customer's browser
+never receives drafts, and "CDA Support" messages are only accepted from employee participants.
+
+> Testing alone: open the customer side in a **private window**. A browser holding the site password
+> always joins as staff.
+
+### How it works
+
+```
+LiveKit room ── voice between everyone (microphone only) + chat + data messages
+   │
+Each browser transcribes ITS OWN microphone with ElevenLabs Scribe (scribe_v2_realtime)
+   -> every line is known to come from the person who said it
+   │
+"Aida" runs in ONE browser: the employee who joined first (the host). If they leave, the next
+employee takes over by themselves.
+   customer line  -> sendUserMessage       -> Aida drafts a reply
+   employee line  -> sendContextualUpdate  -> Aida takes note, stays quiet
+   │
+Drafts go ONLY to employees -> [Approve & send] [Edit] [Decline]
+   │
+Supabase keeps the room and every line, draft and decision (aida_rooms, aida_events)
+```
+
+Notes starting a draft such as `[Check]` or `[Needs a human decision]` are shown to staff as a label
+and are **stripped** before anything is sent to the customer. A draft of `[No reply needed]` is
+dropped silently.
+
+The live transcript only starts **once a CDA employee is in the room**, so a customer waiting alone
+does not spend transcription minutes.
+
+### The Aida agent
+
+| Setting | Value |
+|---|---|
+| Agent | `Aida – CDA copilot (drafts for staff)`, ID `agent_2601m31rbrn8emrbfe8vgxgxdta9` |
+| Model | Gemini 3.7 Flash, temperature 0 — same as Ellie |
+| Knowledge | The same 31 documents and RAG settings as Ellie (shared, not copied) |
+| Prompt | Her own copilot rules, plus Ellie's "Company context", "Knowledge rules", "Safety" and "Handover to a human" sections |
+| Mode | Text only, no first message, session limit 1 hour (the host reconnects her automatically) |
+| Tools / webhook / channels | **None** |
+
+She was **created fresh**, not with ElevenLabs' "duplicate agent": a duplicate could carry Ellie's
+Telegram or email triggers, and two agents on one channel is how Telegram broke before. Ellie was
+checked unchanged afterwards.
+
+### The routes
+
+All under `/api/aida/`, open past the site password and each checking for itself:
+
+| Route | Who | What |
+|---|---|---|
+| `GET /api/aida/rooms` | employee (site password) | open rooms for the lobby |
+| `POST /api/aida/rooms` | anyone | create a room and get a ticket; the site password makes you staff |
+| `POST /api/aida/join` | anyone | join with a code |
+| `GET/POST /api/aida/events` | room ticket | the record; customers cannot post drafts or decisions, and never get drafts back |
+| `POST /api/aida/scribe-token` | room ticket | a one-use Scribe token, only for an open room |
+| `POST /api/aida/copilot` | employee ticket **and** site password | a text session with Aida |
+| `POST /api/aida/close` | employee ticket **and** site password | end the room for everyone |
+
+Rooms expire after **4 hours**. Codes are 6 characters without I, O, 0 or 1, shown as `4F2-K9M`.
+
+### Costs
+
+| | |
+|---|---|
+| LiveKit Cloud | Free "Build" plan, no credit card: 5,000 participant-minutes a month, 100 at once |
+| Live transcript | Scribe realtime, about $0.39 per hour of speech per speaker, from the ElevenLabs plan |
+| Aida's drafts | Text only |
+
+People talking to people through LiveKit uses **no** ElevenLabs voice credits.
+
+### Setup
+
+1. Run `supabase/schema.sql` again (it is now safe to re-run: it never drops or changes data)
+2. LiveKit Cloud → new project → copy the URL, API key and API secret
+3. Add `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and `AIDA_AGENT_ID` to `.env.local`
+   **and** Vercel → Redeploy
+4. Test: employee opens `/aida` → Create room → Copy invite link → open it in a private window as the
+   customer. Headphones on both sides give the cleanest transcript.

@@ -11,6 +11,8 @@
   "dependencies": {
     "@anam-ai/js-sdk": "^4.27.0",
     "@elevenlabs/react": "^1.15.2",
+    "livekit-client": "^2.22.3",
+    "livekit-server-sdk": "^2.19.1",
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
