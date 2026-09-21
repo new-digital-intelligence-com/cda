@@ -57,6 +57,17 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
  Admin: Claude through the ElevenLabs connector (e.g. switch email replies to drafts)
 ```
 
+**Words used in this guide**
+
+| Word | Meaning |
+|---|---|
+| **Trigger** | A link between Ellie and a channel, set in ElevenLabs → Ellie → **Channels** |
+| **Custom Channel** | ElevenLabs' trigger for channels it has no built-in support for. It gives three values: an **Inbound URL** and **Inbound Secret** (where the web app sends the customer's message) and an **Outbound Signing Secret** (proves that an answer really comes from ElevenLabs). Its **Reply Webhook URL** is where ElevenLabs sends Ellie's answer |
+| **Webhook / Callback URL** | An address a platform (Meta, Google) calls when something happens, e.g. a new message |
+| **Verify token** | A secret word Meta sends once to check a Callback URL is really ours |
+| **Web app** | This repository, running on Vercel at https://cda-demo.vercel.app |
+| **Daily cron** | A job Vercel runs every day at 06:00 UTC (`/api/cron/daily`): renews the Gmail watch, refreshes the Instagram token |
+
 ---
 
 ## 2. Ellie, the ElevenLabs agent
@@ -109,141 +120,217 @@ Google Sheets/Slides are not supported by the Drive sync.
 
 ## 3. Telegram
 
-| Item | Value |
-|---|---|
-| Bot | **@CDA_2026_Support_Bot** ("CDA Support Demo"), made with @BotFather |
-| ElevenLabs | Ellie → Channels → **Telegram** → trigger **Message Received**, connection with the bot token |
+**What the customer does:** opens **@CDA_2026_Support_Bot** in Telegram and types a message.
 
-Private chats: every message is answered. Groups: only @mentions and replies to the bot. **Text
-only** (no photos, files or voice notes). Check the webhook with
-`https://api.telegram.org/bot<TOKEN>/getWebhookInfo` — its `url` must point to `api.us.elevenlabs.io`.
-Never connect the same bot token twice.
+**How it works:** ElevenLabs connects to Telegram by itself (a native trigger). No web app code is involved.
+
+```
+Customer → Telegram bot → ElevenLabs Telegram trigger → Ellie → answer in the same chat
+```
+
+| Where | Value |
+|---|---|
+| Bot | **@CDA_2026_Support_Bot** ("CDA Support Demo"), link https://t.me/CDA_2026_Support_Bot |
+| ElevenLabs | Ellie → Channels → **Telegram** → trigger **Message Received**, with the bot's token |
+
+**Set it up from zero**
+1. In Telegram, message **@BotFather** → `/newbot` → give a name and a username ending in `bot` → copy the **token**.
+2. ElevenLabs → Agents → **CDA Assistant – Demo** → **Channels** → **Telegram** → **Add trigger** →
+   **Message Received** → new connection → paste the token → **Save**. Paste a token only once.
+3. **Test:** send "What warranty do CDA appliances have?" to the bot → Ellie answers in a few seconds.
+
+**Good to know**
+- Private chats: every message is answered. Groups: only messages that @mention the bot or reply to it.
+- **Text only**: Ellie does not see photos, files or voice notes (she asks the customer to type the details).
+- Not answering? Open `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`: its `url` must point to `api.us.elevenlabs.io`.
 
 ---
 
 ## 4. Email
 
-The web app reads the CDA mailbox through the Gmail API, hands each email to Ellie through her own
-Custom Channel trigger, and **sends her reply or leaves it as a Gmail draft**. Freshdesk is no longer used.
+**What the customer does:** sends an email to **cda_domestic_appliances@new-digital-intelligence.com**
+and gets Ellie's answer as a normal reply in the same email thread.
 
-| Item | Value |
+**How it works**
+
+```
+1. Customer email arrives in Gmail
+2. Google tells the web app at once (Gmail "watch" + Pub/Sub)        → /api/email/gmail-push
+3. The web app skips robots (codes, alerts, newsletters, no-reply)   → no credits spent
+4. It passes the email to Ellie through the "CDA email" Custom Channel
+5. Ellie's answer comes back                                        → /api/email/ellie-reply
+6. The web app sends it in the customer's thread (auto)
+   or saves it as a Gmail draft for staff (draft), and labels the email in Gmail
+```
+
+| Where | Value |
 |---|---|
 | Mailbox | **cda_domestic_appliances@new-digital-intelligence.com** (Google Workspace) |
-| Google Cloud | Project `cda-email-509312` (billing linked; stays in the free tier). Gmail API + Pub/Sub API |
-| Gmail access | OAuth client "Desktop", consent screen **Internal**, scope `gmail.modify`, one refresh token |
-| Pub/Sub | Topic `gmail-inbox` (Publisher: `gmail-api-push@system.gserviceaccount.com`); push subscription `gmail-inbox-push` → `/api/email/gmail-push?token=<GMAIL_PUSH_SECRET>`, never expires, ack deadline 60 s |
-| ElevenLabs | Ellie → Channels → Custom Channel, connection **CDA email** (`trigger_cxn_4401m321spm3f9nah3y9bsn5mn4n`), Reply Webhook URL `https://cda-demo.vercel.app/api/email/ellie-reply` |
-| Send or draft | `email_mode` = `auto` / `draft`, a dynamic variable placeholder on the **Aida** agent |
+| Google Cloud | Project `cda-email-509312`: Gmail API + Pub/Sub. OAuth client "Desktop", consent screen **Internal**, scope `gmail.modify` |
+| Pub/Sub | Topic `gmail-inbox`; subscription `gmail-inbox-push` → `https://cda-demo.vercel.app/api/email/gmail-push?token=<GMAIL_PUSH_SECRET>` |
+| ElevenLabs | Ellie → Channels → Custom Channel, connection **CDA email**, Reply Webhook URL `https://cda-demo.vercel.app/api/email/ellie-reply` |
+| Auto or draft | `email_mode` (`auto` / `draft`), stored on the **Aida** agent |
 
-```
-Customer email → Gmail → Pub/Sub → /api/email/gmail-push
-   → rules skip robots (no credits) → Ellie via "CDA email"
-Ellie's answer → /api/email/ellie-reply → reads email_mode on Aida
-   → auto:  sent in the customer's thread         → label Ellie/Replied
-   → draft: Gmail draft in the customer's thread  → label Ellie/Draft ready
-```
+**Set it up from zero**
+1. **Google Cloud** (console.cloud.google.com) → new project → link a billing account (Pub/Sub stays in
+   the free tier) → enable **Gmail API** and **Cloud Pub/Sub API**.
+2. **OAuth consent screen** → Internal. **Credentials** → Create OAuth client ID → **Desktop app** → keep
+   the Client ID and Client secret.
+3. **Allow access once**: open Google's consent link for that client with scope `gmail.modify`
+   (`access_type=offline`, `prompt=consent`, a `http://localhost` redirect), sign in as the mailbox, click
+   **Allow**, and exchange the returned code for a **refresh token**.
+4. **Pub/Sub** → create topic `gmail-inbox` → on the topic, add principal
+   `gmail-api-push@system.gserviceaccount.com` with role **Pub/Sub Publisher** → create subscription
+   `gmail-inbox-push`: type **Push**, endpoint `…/api/email/gmail-push?token=<GMAIL_PUSH_SECRET>`,
+   expiration **never**, acknowledgement deadline **60 s**.
+5. **ElevenLabs** → Ellie → Channels → **Custom Channel** → Add trigger → new connection `CDA email` →
+   Reply Webhook URL `…/api/email/ellie-reply` → copy the **Inbound URL**, **Inbound Secret** and
+   **Outbound Signing Secret**.
+6. **Vercel**: add the email variables (section 10) → Redeploy. **Supabase**: run `supabase/schema.sql`.
+7. **Start the watch once**: `GET https://cda-demo.vercel.app/api/email/gmail-watch` with header
+   `Authorization: Bearer <GMAIL_PUSH_SECRET>`. From then on the daily cron keeps it alive.
+8. **Test:** from another address, email "How long is the warranty on a CDA oven?" → a reply arrives
+   in the same thread within ~30 s, and the email gets the green **Ellie/Replied** label.
 
-- **Each email is its own ElevenLabs conversation** (Custom Channel conversations end after one turn).
-  Ellie gets `[Email to CDA customer care]`, sender, subject and up to 6,000 characters of text;
-  attachments are named, not opened. Her reply is cleaned (no copied header, no markdown) and sent
-  as `"CDA Customer Care (demo)"` with `Re:` and In-Reply-To/References, so it lands in the thread
-- **Robots are skipped**: rules in `src/lib/emailParse.ts` (no-reply and notification senders,
-  "security code"-type subjects, Gmail Promotions/Social/Forums, newsletter and bulk headers, bounces,
-  more than 5 emails an hour from one sender), then Ellie answers `SKIP` to anything else not written
-  by a person. Mail older than 24 hours or from the mailbox itself is never answered. Automatic
-  replies carry `Auto-Submitted: auto-replied` so out-of-office robots don't loop
-- **Labels** under "Ellie" in Gmail: **Replied** (green, email marked read) · **Draft ready**
-  (orange: open, check, press Send) · **Skipped** (grey) · **Failed** (red: answer by hand)
-- **Switch send/draft**: `/admin` → **Email** tab, or ask Claude with the ElevenLabs connector:
+**Using it**
+- **Labels in Gmail** (under "Ellie"): **Replied** · **Draft ready** (open the email, check the draft,
+  press Send) · **Skipped** (a robot or newsletter) · **Failed** (answer it by hand).
+- **Switch auto / draft**: `/admin` → **Email** tab, or ask Claude with the ElevenLabs connector:
   *"Set the dynamic variable placeholder email_mode on the agent Aida – CDA copilot to draft"*.
-  Read again for every reply; anything unreadable counts as `draft`. It sits on Aida, not Ellie, so
-  it cannot affect Ellie's channel triggers. The dashboard's **Vars** panel does not list it (only
-  variables used as `{{…}}` are shown)
-- **Supabase**: `email_messages` (one row per email: sender, subject, status, reason, conversation —
-  never the text; the row also stops double replies) and `gmail_state` (how far the inbox was read)
-- **Gmail watch** lasts 7 days: the daily cron (`/api/cron/daily`, 06:00 UTC) renews it and catches
-  up on anything missed. By hand: `GET /api/email/gmail-watch` with `Authorization: Bearer <GMAIL_PUSH_SECRET>`
-- The refresh token belongs to the mailbox: if its password changes or access is removed, email
-  stops ("invalid_grant" in the logs) → run the Google consent again
+  It is read for every reply. It does not appear in Aida's **Vars** panel in ElevenLabs; that is normal.
+
+**Good to know**
+- Each email is a separate conversation for Ellie; earlier messages are quoted in the email itself.
+- Ellie gets up to 6,000 characters; she cannot open attachments.
+- Robots are skipped twice: by rules first (`src/lib/emailParse.ts`), then by Ellie, who answers
+  `SKIP` to anything not written by a person. Mail older than 24 hours is never answered.
+- If the mailbox password changes, Gmail access stops ("invalid_grant" in the logs): repeat step 3.
 
 ---
 
 ## 5. Instagram and Facebook Messenger
 
-Both run **in the web app** with one shared module (`src/lib/metaChat.ts`; settings in
-`src/lib/instagram.ts` and `src/lib/messenger.ts`). Make.com is no longer used.
+Both work the same way and run in the web app (`src/lib/metaChat.ts`, with the settings of each in
+`src/lib/instagram.ts` and `src/lib/messenger.ts`). Both use one Meta developer app, **"Customer Support"**.
 
 ```
-Message → Meta webhook → /api/<instagram|messenger>/webhook → Ellie via that channel's Custom Channel
-Message ← Instagram / Messenger Send API ← /api/<instagram|messenger>/reply ← reply webhook ←┘
+1. The customer sends a message
+2. Meta calls the web app                   → /api/instagram/webhook  or  /api/messenger/webhook
+3. The web app passes it to Ellie through that channel's Custom Channel
+4. Ellie's answer comes back                → /api/instagram/reply    or  /api/messenger/reply
+5. The web app sends it with Instagram's or Messenger's API
 ```
 
-| | Instagram | Messenger |
-|---|---|---|
-| Account | **@new_digital_intelligence** (Business), IG user ID `17841430407573788` | Page **New Digital Intelligence**, Page ID `1450409441479124` |
-| Meta app | "Customer Support", use case **API setup with Instagram login** (`instagram_business_basic`, `instagram_business_manage_messages`) | Same app, use case **Engage with customers on Messenger from Meta** (`pages_messaging`) |
-| Callback URL | `https://cda-demo.vercel.app/api/instagram/webhook?token=<INSTAGRAM_WEBHOOK_SECRET>` | `https://cda-demo.vercel.app/api/messenger/webhook?token=<MESSENGER_WEBHOOK_SECRET>` |
-| Verify token | The same `INSTAGRAM_WEBHOOK_SECRET` | The same `MESSENGER_WEBHOOK_SECRET` |
-| Webhook field | `messages` | `messages` (Page subscribed) |
-| ElevenLabs trigger | Connection **CDA Instagram** (`trigger_cxn_4401m32x7dbse6a8h474rbdak85j`), Reply Webhook URL `…/api/instagram/reply` | Connection **CDA Messenger** (`trigger_cxn_3101m32vj4fbf248z8k7pv2rknz6`), Reply Webhook URL `…/api/messenger/reply` |
-| Token | 60 days at most — **refreshed automatically** every 7 days by the daily cron and kept in Supabase `channel_tokens` (`INSTAGRAM_ACCESS_TOKEN` is only the starting token) | Page token, **never expires** (Meta lists a data-access date of 20 Dec 2026: if it stops after that, Generate token again) |
-| Message limit | 1,000 characters | 2,000 characters |
-| Link on the site | https://ig.me/m/new_digital_intelligence | https://m.me/1450409441479124 |
+A person's messages stay in **one conversation for 10 minutes**, then a new one starts. "Typing…"
+shows while Ellie writes. Answers are plain text; Ellie cannot see photos or files. The Meta app must
+stay **Published** (it needs a public privacy policy link). No App Review is needed: people with no
+role on the app got answers in testing. Don't use "CDA" in any Meta account or Page name (Meta
+restricted one before).
 
-- A person's messages continue the same conversation for **10 minutes**, then a new one starts.
-  Supabase `instagram_threads` / `messenger_threads` keep, per person, their conversation and the last
-  answer sent (a repeated delivery never sends twice) — no message text
-- "Typing…" shows while Ellie writes; answers are plain text (markdown removed) and split to the
-  platform's limit; photos and files are not seen (Ellie is told so); replies go out within 24 hours
-- New people are recognised by name (profile) and remembered like Telegram (section 7); our own
-  account's echoes are ignored. With `META_APP_SECRET` set, Meta's signature is checked too
-- **No App Review needed**: tested on 21 Sep 2026 from accounts with no role on the app or the Page
-- The app must stay **Published** (privacy policy in a public Google Doc)
-- Don't brand the account or Meta business "CDA" (Meta restricted an account named "CDA Customer Care")
-- **Switching account or Page**: new token in the app → update the ID and token variables on Vercel
-  → set the webhook in the app → update the buttons in `src/components/ChannelLinks.tsx`
+### Instagram
 
-The old Make.com scenarios for Instagram (7456234, 7456248) are switched **off** and kept only as a backup.
+**What the customer does:** sends a DM to **@new_digital_intelligence** (https://ig.me/m/new_digital_intelligence).
+
+| Where | Value |
+|---|---|
+| Account | **@new_digital_intelligence**, Business account, ID `17841430407573788` |
+| Meta app | "Customer Support" → use case **Manage messaging & content on Instagram** → **API setup with Instagram login** |
+| Webhook | Callback URL `https://cda-demo.vercel.app/api/instagram/webhook?token=<INSTAGRAM_WEBHOOK_SECRET>`, Verify token = the same secret, field `messages` |
+| ElevenLabs | Custom Channel, connection **CDA Instagram**, Reply Webhook URL `https://cda-demo.vercel.app/api/instagram/reply` |
+| Token | Lasts 60 days, **renewed automatically** every 7 days by the daily cron (stored in Supabase) |
+
+**Set it up from zero**
+1. On Instagram, make the account **Professional** (Business or Creator).
+2. **developers.facebook.com** → the app → **Use cases** → "Manage messaging & content on Instagram" →
+   **API setup with Instagram login** → **Add account** → log in → **Generate token**.
+   ("Insufficient developer role"? App roles → add the account as **Instagram Tester**, accept at
+   instagram.com/accounts/manage_access, try again.)
+3. Find the account ID: open `https://graph.instagram.com/v25.0/me?fields=user_id,username&access_token=<TOKEN>` → `user_id`.
+4. **ElevenLabs** → Ellie → Channels → **Custom Channel** → Add trigger → new connection `CDA Instagram`
+   → Reply Webhook URL `…/api/instagram/reply` → copy Inbound URL, Inbound Secret, Outbound Signing Secret.
+5. **Vercel**: add the `INSTAGRAM_*` variables (section 10) → Redeploy. **Supabase**: run `supabase/schema.sql`.
+6. Meta app → **Configure webhooks** → Callback URL and Verify token as in the table → **Verify and save**
+   → subscribe **messages**. Then connect the account once:
+   `POST https://graph.instagram.com/v25.0/me/subscribed_apps?subscribed_fields=messages&access_token=<TOKEN>`.
+7. **App settings → Basic** → Privacy Policy URL → switch the app to **Live** (Publish).
+8. **Test:** from another Instagram account, DM "What's the spare parts phone number?" → Ellie answers
+   **01949 862019** within ~20 s.
+
+Good to know: replies are cut to 1,000 characters and must go out within 24 hours of the DM (Ellie
+answers in seconds).
+
+### Facebook Messenger
+
+**What the customer does:** messages the Facebook Page **New Digital Intelligence** (https://m.me/1450409441479124).
+
+| Where | Value |
+|---|---|
+| Page | **New Digital Intelligence**, Page ID `1450409441479124` |
+| Meta app | The same app → use case **Engage with customers on Messenger from Meta** → **Messenger API Settings** |
+| Webhook | Callback URL `https://cda-demo.vercel.app/api/messenger/webhook?token=<MESSENGER_WEBHOOK_SECRET>`, Verify token = the same secret, Page subscribed to `messages` |
+| ElevenLabs | Custom Channel, connection **CDA Messenger**, Reply Webhook URL `https://cda-demo.vercel.app/api/messenger/reply` |
+| Token | Page token, **never expires** (if Messenger ever stops after 20 Dec 2026, generate it again) |
+
+**Set it up from zero**
+1. Have a Facebook **Page** (not a personal profile) that you are admin of.
+2. Meta app → **Add use case** → "Engage with customers on Messenger from Meta" → **Messenger API
+   Settings** → **Generate access tokens** → connect the Page → **Generate token**.
+3. **ElevenLabs** → Ellie → Channels → **Custom Channel** → Add trigger → new connection `CDA Messenger`
+   → Reply Webhook URL `…/api/messenger/reply` → copy Inbound URL, Inbound Secret, Outbound Signing Secret.
+4. **Vercel**: add the `MESSENGER_*` variables (section 10) → Redeploy. **Supabase**: run `supabase/schema.sql`.
+5. Messenger API Settings → **Configure webhooks** → Callback URL and Verify token as in the table →
+   **Verify and save** → next to the Page, **Add subscriptions** → **messages**.
+6. **Test:** from a personal Facebook account, message the Page "How long is the warranty on a CDA
+   oven?" → Ellie answers within ~20 s.
+
+Good to know: long answers are split into messages of up to 2,000 characters.
 
 ---
 
 ## 6. Website
 
-### Customer site `https://cda-demo.vercel.app` (site password)
+**What the customer does:** opens https://cda-demo.vercel.app, types the **site password**, and uses
+one of four tabs. The website talks to Ellie directly through ElevenLabs' SDK.
 
-- **Tabs**: 💬 **Chat** (markdown replies, images/PDFs up to 3 per message, 10 MB each) ·
-  🎙️ **Voice** (WebRTC, live transcript) · 🧑‍💼 **Avatar** (below) · 📞 **Aida** (join a live call
-  with CDA staff by code, or open a room — always as the customer, section 8)
-- **Your CDA account**: create an account, link channels with a code (section 7)
-- **Message Ellie on your app**: Email (Gmail compose), Telegram, Instagram, Messenger
-- **Email me this conversation** (chat, voice, avatar): the text comes from ElevenLabs' transcript,
-  only the browser that had the conversation can send it, the session is ended first; one click for
-  a signed-in customer. Sent from `gmail_sender`
-- The staff page is `/admin` (section 9); it is not linked from here
+| Tab | What happens |
+|---|---|
+| 💬 **Chat** | Typed chat with Ellie; the customer can attach photos or PDFs (3 per message, 10 MB each) |
+| 🎙️ **Voice** | A spoken call with Ellie in the browser, with a live transcript |
+| 🧑‍💼 **Avatar** | A video call with Ellie's face (below) |
+| 📞 **Aida** | A live call with CDA staff: join with a code or open a room (section 8) |
+
+Also on the page: **Your CDA account** (link channels with a code, section 7), buttons that open
+Email, Telegram, Instagram and Messenger, and **Email me this conversation** under chat, voice and
+avatar (one click for a signed-in customer). The staff page `/admin` is not linked from here.
 
 ### Video avatar (Anam)
 
-**Anam draws Ellie's face** (avatar **Sofia**, our Ellie picture, model Cara 4, Director Notes
-`warm` 0.5); Ellie on ElevenLabs still listens, thinks and speaks. The server gets an ElevenLabs
-signed URL and creates an Anam session token joined to Ellie (`/api/anam/session`); the browser
-streams it with the Anam SDK. Horizontal 1152×768 or vertical 768×1152, live captions.
+Anam only **draws Ellie's face** (avatar **Sofia**, made from our Ellie picture); Ellie on ElevenLabs
+still listens, thinks and speaks.
 
-**Free plan**: 30 minutes a month, **3-minute calls** (`ANAM_MAX_SESSION_SECONDS=180`), watermark.
-Explorer ($49/month) removes the watermark and allows 10-minute calls (then raise the variable).
-The "Olivia" persona in Anam Lab is not used.
+**Set it up from zero**
+1. **lab.anam.ai** → create an avatar from the picture → copy its ID and the **API key**.
+2. ElevenLabs → Ellie → set the **user input audio format to PCM 16000 Hz** (Anam needs it).
+3. **Vercel**: `ANAM_API_KEY`, `ANAM_AVATAR_ID`, `ANAM_MAX_SESSION_SECONDS=180` → Redeploy.
+4. **Test:** Avatar tab → Start video call → ask a question.
+
+Good to know: Anam's **free plan** gives 30 minutes a month and **3-minute calls**, with a watermark
+(Explorer, $49/month: no watermark, 10-minute calls). A voice or avatar minute costs about 600
+ElevenLabs credits. If a call won't start, look in the browser console (F12) and the Vercel logs.
 
 ### Hosted page and widget (no password)
 
-https://elevenlabs.io/app/talk-to?agent_id=agent_3601m2p374tce96b7p6hdfz5f1tv (voice + text; the QR
-code can be regenerated from this link). Widget for any site:
+ElevenLabs' own page: https://elevenlabs.io/app/talk-to?agent_id=agent_3601m2p374tce96b7p6hdfz5f1tv
+(voice and text; the QR code is made from this link). Set in Ellie → Channels → **Widget**. To add the
+chat bubble to any website:
 
 ```html
 <elevenlabs-convai agent-id="agent_3601m2p374tce96b7p6hdfz5f1tv"></elevenlabs-convai>
 <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
 ```
 
-> Anyone with the link or agent ID can use credits. Turning on agent authentication (Security) stops
-> the page, QR and widget; retest every channel after such a change.
+> Anyone with this link can talk to Ellie and use credits. Turning on authentication in Ellie's
+> **Security** settings stops the page, QR code and widget; test every channel after such a change.
 
 ---
 
