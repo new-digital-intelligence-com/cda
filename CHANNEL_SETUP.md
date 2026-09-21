@@ -78,7 +78,7 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
 | Agent | `CDA Assistant – Demo`, ID `agent_3601m2p374tce96b7p6hdfz5f1tv`, branch `agtbrch_9301m2p375xzetbbsyymxnbnsf1s` (Main, 100% of traffic) |
 | LLM | Gemini 3.7 Flash, temperature 0 |
 | Voice | **Shelley** – Clear, Confident and British (`4CrZuIW9am7gYAxgo2Af`), in every language |
-| Languages | **English** (default): TTS **Eleven Flash v2**. **Polish**: language preset `pl` with a Polish greeting and TTS **Eleven Flash v2.5** (multilingual), chosen by the website at the start of a voice or avatar call. Security → the `language` override is allowed (as is `text_only` for the chat) |
+| Languages | **English** (default): TTS **Eleven Flash v2**. **Polish**: language preset `pl` with a Polish greeting and TTS **Eleven Flash v2.5** (multilingual), chosen by the website at the start of a voice or avatar call. Built-in tool **language detection** is on: during a call Ellie follows the customer between English and Polish by herself. Security → the `language` override is allowed (as is `text_only` for the chat) |
 | Speech to text | Scribe Realtime, quality high; turn model turn_v3, turn timeout 7 s |
 | Audio | Input **PCM 16000 Hz** (Anam needs it), output PCM 24000 Hz |
 | First message | "Hello, you're through to CDA's virtual assistant, Ellie. How can I help you today?" (not sent on Custom Channel text channels) |
@@ -300,8 +300,8 @@ one of four tabs. The website talks to Ellie directly through ElevenLabs' SDK.
 | 🧑‍💼 **Avatar** | A video call with Ellie's face (below) |
 
 **Voice and Avatar language:** an **English | Polski** switch above the start button (one choice for
-both tabs). It applies to the next call: ElevenLabs keeps one language per call, so to change it, end the
-call and start again. In Polish, Ellie greets, listens and answers in Polish, in Shelley's voice. Text
+both tabs) sets the language Ellie starts in. During the call there is no button: just speak the other
+language, or ask her to switch, and she follows (ElevenLabs' language detection). Shelley's voice either way. Text
 channels need no switch: Ellie answers in the language the customer writes in.
 | 📞 **Aida** | A live call with CDA staff: join with a code or open a room (section 8) |
 
