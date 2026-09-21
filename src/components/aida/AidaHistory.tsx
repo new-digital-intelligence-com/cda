@@ -130,6 +130,7 @@ export function AidaHistory({ code, staffToken, onBack }: { code: string; staffT
           <EmailTranscriptForm
             label="Email me this conversation"
             note={isStaff ? "Staff copies also list Aida's drafts." : undefined}
+            useAccountEmail={!isStaff}
             onSend={(email) => postEmail("/api/aida/email", { code: room.code, email }, staffHeader)}
           />
         )}

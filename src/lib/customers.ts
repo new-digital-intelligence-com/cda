@@ -302,3 +302,9 @@ export async function getCustomer(customerId: string): Promise<Customer | null> 
   const rows = await rest<Customer[]>(`customers?id=eq.${q(customerId)}&select=id,name&limit=1`);
   return rows[0] ?? null;
 }
+
+/** The address a signed-in customer signed up with: their first verified email channel. */
+export async function accountEmail(customerId: string): Promise<string | null> {
+  const channels = await listChannels(customerId);
+  return channels.find((row) => row.channel === "email" && row.verified)?.channel_key ?? null;
+}

@@ -346,7 +346,9 @@ If used on a real site, add the domain in **Security → Allowlist**.
 - **Email me this conversation**: under the chat, the voice transcript and after an avatar call. The
   text comes from ElevenLabs' own transcript (`POST /api/transcript/email`), never from the browser,
   and only the browser that had the conversation can send it. A chat or call is ended first, so the
-  email is complete. Sent from `gmail_sender`
+  email is complete. Sent from `gmail_sender`. A customer signed in to their CDA account gets it
+  with **one click** at the address they signed up with (shown, with an "another address" link);
+  anyone else types an address
 - **Password lock**: every page and API route requires `SITE_PASSWORD` (checked in `src/proxy.ts` and again in the API routes); site stays locked if the variable is missing
 
 ### Important files
@@ -1024,8 +1026,9 @@ transcribed or drafted in it (every route answers `410`). Its **history stays re
 Staff see Aida's drafts and what was done with each; customers only see the conversation.
 
 **Email the history**: once a room has ended, anyone reading it can have it emailed to the address
-they type (`POST /api/aida/email`), from `gmail_sender`. Customers get the conversation; staff copies
-also list Aida's drafts. At most 10 emails per room, so the mailbox cannot be used for spam, and the
+they type (`POST /api/aida/email`), from `gmail_sender`. A signed-in customer does not type it: one
+click sends it to their account email. Staff always type an address. Customers get the
+conversation; staff copies also list Aida's drafts. At most 10 emails per room, so the mailbox cannot be used for spam, and the
 recipient address is not stored.
 
 ### Customers signed in to their CDA account
