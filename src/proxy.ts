@@ -18,9 +18,11 @@ export async function proxy(request: NextRequest) {
   // HMAC signature, the cron secret, or the Aida staff token for the staff switch.
   if (pathname.startsWith("/api/email/")) return NextResponse.next();
 
-  // Messenger: Meta posts messages (secret in the URL) and ElevenLabs posts Ellie's replies (HMAC
-  // signature). Each route checks its own proof.
-  if (pathname.startsWith("/api/messenger/")) return NextResponse.next();
+  // Messenger and Instagram: Meta posts messages (secret in the URL) and ElevenLabs posts Ellie's
+  // replies (HMAC signature). The daily cron sends the cron secret. Each route checks its own proof.
+  if (pathname.startsWith("/api/messenger/") || pathname.startsWith("/api/instagram/") || pathname.startsWith("/api/cron/")) {
+    return NextResponse.next();
+  }
 
   // Aida has its own staff password, separate from this one. Its pages and routes are open here and
   // every route decides for itself: the Aida staff token makes you an employee, a signed room ticket

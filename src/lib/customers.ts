@@ -87,34 +87,32 @@ export async function resolveIdentity(body: Record<string, unknown>): Promise<Id
   const sender = await emailSender(conversationId);
   if (sender) return { channel: "email", key: sender.email, name: sender.name };
 
-  const messenger = await messengerSender(conversationId);
+  const messenger = await threadSender("messenger_threads", conversationId);
   if (messenger) return { channel: "messenger", key: messenger };
 
-  const instagram = await instagramSender(conversationId);
+  const instagram = (await threadSender("instagram_threads", conversationId)) ?? (await instagramSender(conversationId));
   if (instagram) return { channel: "instagram", key: instagram };
 
   return null;
 }
 
-/** A Messenger conversation: the web app notes who is in it (src/lib/messenger.ts). */
-async function messengerSender(conversationId: string): Promise<string | null> {
+/** A Messenger or Instagram conversation: the web app notes who is in it (src/lib/metaChat.ts). */
+async function threadSender(table: "messenger_threads" | "instagram_threads", conversationId: string): Promise<string | null> {
   if (!conversationId) return null;
   try {
-    const rows = await rest<{ psid: string }[]>(
-      `messenger_threads?conversation_id=eq.${q(conversationId)}&select=psid&limit=1`,
-    );
+    const rows = await rest<{ psid: string }[]>(`${table}?conversation_id=eq.${q(conversationId)}&select=psid&limit=1`);
     return rows[0]?.psid ?? null;
   } catch (error) {
-    console.error("Messenger sender lookup failed", error);
+    console.error(`${table} sender lookup failed`, error);
     return null;
   }
 }
 
 /**
- * Instagram DMs reach Ellie through Make and a Custom Channel trigger, and Make passes the sender's
- * id as the dynamic variable `instagram_id`. It is read here from the stored conversation, never
- * bound to a tool parameter: a tool bound to a variable that only Instagram sends would fail on
- * every other channel.
+ * Instagram conversations started while Make.com carried Instagram: Make passed the sender's id as
+ * the dynamic variable `instagram_id`. It is read from the stored conversation, never bound to a
+ * tool parameter: a tool bound to a variable that only Instagram sends would fail on every other
+ * channel.
  */
 async function instagramSender(conversationId: string): Promise<string | null> {
   if (!conversationId) return null;

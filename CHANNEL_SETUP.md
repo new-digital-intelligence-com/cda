@@ -37,7 +37,7 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
 | Admin https://cda-demo.vercel.app/admin | ✅ | Staff page, Aida staff password |
 | Telegram **@CDA_2026_Support_Bot** | ✅ | Native ElevenLabs Telegram trigger |
 | Email **cda_domestic_appliances@new-digital-intelligence.com** | ✅ | Gmail push → web app → Custom Channel "CDA email" |
-| Instagram **@new_digital_intelligence** | ✅ | Make.com → Custom Channel |
+| Instagram **@new_digital_intelligence** | ✅ | Meta webhook → web app → Custom Channel "CDA Instagram" |
 | Facebook Messenger, Page **New Digital Intelligence** | ✅ (21 Sep) | Meta webhook → web app → Custom Channel "CDA Messenger" |
 | Hosted page / QR code | ✅ | ElevenLabs talk-to link (no password) |
 | Slack | ⏳ | Waiting for a Slack workspace (section 13) |
@@ -48,8 +48,7 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
  Avatar tab ─► Anam (video face) ───────►│
  Telegram bot ──────────────────────────►│   ElevenLabs agent "Ellie"
  Email ─► Gmail ─► web app ─────────────►│   Gemini 3.7 Flash · 31 documents (RAG)
- Instagram DM ─► Make.com ──────────────►│
- Messenger ─► web app ──────────────────►│
+ Instagram / Messenger ─► web app ──────►│
  Hosted page / QR ──────────────────────►┘
                                              │ 2 tools + post-call webhook
                                              ▼
@@ -171,67 +170,42 @@ Ellie's answer → /api/email/ellie-reply → reads email_mode on Aida
 
 ## 5. Instagram and Facebook Messenger
 
-### Instagram (Make.com)
-
-ElevenLabs has no native Instagram channel, so Make.com passes messages both ways.
-
-| Item | Value |
-|---|---|
-| Account | **@new_digital_intelligence** (Business), IG user ID `17841430407573788` |
-| Meta app | New developer app (21 Sep 2026), use case "Manage messaging & content on Instagram" → **API setup with Instagram login**, **Published**, privacy policy in a public Google Doc |
-| Permissions | `instagram_business_basic`, `instagram_business_manage_messages` (Standard Access) |
-| Webhook | Field `messages`, Callback URL = Make webhook `instagram-in`, verify token = the one in Make's "Meta verification" filter |
-| Make.com | Team "My Team" (eu1), free plan (1,000 operations a month). Scenarios **IG – Instagram in** (7456234) and **IG – Ellie reply out** (7456248); data store `ig_conversations` (190081) |
-| ElevenLabs | Ellie → Channels → Custom Channel, trigger `trigger_cxn_0101m2pccemse2591rmxbbet8742`, Reply Webhook URL = Make webhook `ellie-reply` |
+Both run **in the web app** with one shared module (`src/lib/metaChat.ts`; settings in
+`src/lib/instagram.ts` and `src/lib/messenger.ts`). Make.com is no longer used.
 
 ```
-DM → Meta webhook → Make "IG – Instagram in" → Custom Channel → Ellie
-DM ← Instagram Send API ← Make "IG – Ellie reply out" ← reply webhook ←┘
+Message → Meta webhook → /api/<instagram|messenger>/webhook → Ellie via that channel's Custom Channel
+Message ← Instagram / Messenger Send API ← /api/<instagram|messenger>/reply ← reply webhook ←┘
 ```
 
-- **In**: answers Meta's verification (`hub.challenge`); for a real DM (text, not from our account,
-  not an echo) posts to the Custom Channel with header `X-Webhook-Secret` and body
-  `{data:{type:"user_message", text, user_identifier}, user_message_id:"<sender>|<mid>", conversation_id?, dynamic_variables:{instagram_id}}`.
-  A conversation continues for 10 minutes (data store), then a new one starts
-- **Out**: for each `agent_response` in `data[]`, POST `graph.instagram.com/v25.0/17841430407573788/messages`
-  with `Authorization: Bearer <Instagram token>` to the sender taken from `user_message_ids` (max 1,000 characters)
-- Replies must go out within 24 hours of the DM; text only
-- **Token: 60 days at most** (Meta has no longer token). Refresh after it is 24 h old:
-  `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=<TOKEN>`,
-  then put the new token in the reply scenario's Authorization header
-- **Switching account or app**: generate a token in the app → `GET /me?fields=user_id,username` →
-  replace the IG user ID in both scenarios and the token in the reply one → subscribe the account
-  (`POST /v25.0/me/subscribed_apps?subscribed_fields=messages`) → set the app's webhook → publish →
-  update the button in `src/components/ChannelLinks.tsx`. Nothing changes in ElevenLabs
-- Don't brand the account or Meta business "CDA" (Meta restricted an account named "CDA Customer Care")
-
-### Facebook Messenger (handled by the web app)
-
-Make's free plan allows only **2 active scenarios**, and Instagram uses both, so Messenger runs in
-the web app, like email (`src/lib/messenger.ts`).
-
-| Item | Value |
-|---|---|
-| Page | **New Digital Intelligence**, Page ID `1450409441479124` (button: https://m.me/1450409441479124) |
-| Meta app | The same app ("Customer Support"), use case **Engage with customers on Messenger from Meta** |
-| Page token | `pages_messaging`; **never expires** (Meta lists a data-access date of 20 Dec 2026: if Messenger stops after it, click Generate token again) |
-| Webhook | Callback URL `https://cda-demo.vercel.app/api/messenger/webhook?token=<MESSENGER_WEBHOOK_SECRET>`, Verify token = the same secret, Page subscribed to **messages** |
-| ElevenLabs | Ellie → Channels → Custom Channel, connection **CDA Messenger** (`trigger_cxn_3101m32vj4fbf248z8k7pv2rknz6`), Reply Webhook URL `https://cda-demo.vercel.app/api/messenger/reply` |
-
-```
-Message → Meta webhook → /api/messenger/webhook → Ellie via "CDA Messenger"
-Message ← Messenger Send API ← /api/messenger/reply ← reply webhook ←┘
-```
+| | Instagram | Messenger |
+|---|---|---|
+| Account | **@new_digital_intelligence** (Business), IG user ID `17841430407573788` | Page **New Digital Intelligence**, Page ID `1450409441479124` |
+| Meta app | "Customer Support", use case **API setup with Instagram login** (`instagram_business_basic`, `instagram_business_manage_messages`) | Same app, use case **Engage with customers on Messenger from Meta** (`pages_messaging`) |
+| Callback URL | `https://cda-demo.vercel.app/api/instagram/webhook?token=<INSTAGRAM_WEBHOOK_SECRET>` | `https://cda-demo.vercel.app/api/messenger/webhook?token=<MESSENGER_WEBHOOK_SECRET>` |
+| Verify token | The same `INSTAGRAM_WEBHOOK_SECRET` | The same `MESSENGER_WEBHOOK_SECRET` |
+| Webhook field | `messages` | `messages` (Page subscribed) |
+| ElevenLabs trigger | Connection **CDA Instagram** (`trigger_cxn_4401m32x7dbse6a8h474rbdak85j`), Reply Webhook URL `…/api/instagram/reply` | Connection **CDA Messenger** (`trigger_cxn_3101m32vj4fbf248z8k7pv2rknz6`), Reply Webhook URL `…/api/messenger/reply` |
+| Token | 60 days at most — **refreshed automatically** every 7 days by the daily cron and kept in Supabase `channel_tokens` (`INSTAGRAM_ACCESS_TOKEN` is only the starting token) | Page token, **never expires** (Meta lists a data-access date of 20 Dec 2026: if it stops after that, Generate token again) |
+| Message limit | 1,000 characters | 2,000 characters |
+| Link on the site | https://ig.me/m/new_digital_intelligence | https://m.me/1450409441479124 |
 
 - A person's messages continue the same conversation for **10 minutes**, then a new one starts.
-  Supabase `messenger_threads` keeps, per person, their conversation and the last answer sent (so a
-  repeated delivery never sends twice) — no message text
-- A "typing…" bubble shows while Ellie writes; answers are plain text (markdown removed), split into
-  2,000-character messages; photos and files are not seen (Ellie is told so)
-- New people are recognised by name (Messenger profile) and remembered like Telegram (section 7)
-- Our own Page's echoes are ignored. With `META_APP_SECRET` set, Meta's signature is checked too
-- **No App Review needed** for our own Page: tested on 21 Sep 2026 from a Facebook account with no
-  role on the app or the Page, and Ellie answered
+  Supabase `instagram_threads` / `messenger_threads` keep, per person, their conversation and the last
+  answer sent (a repeated delivery never sends twice) — no message text
+- "Typing…" shows while Ellie writes; answers are plain text (markdown removed) and split to the
+  platform's limit; photos and files are not seen (Ellie is told so); replies go out within 24 hours
+- New people are recognised by name (profile) and remembered like Telegram (section 7); our own
+  account's echoes are ignored. With `META_APP_SECRET` set, Meta's signature is checked too
+- **No App Review needed**: tested on 21 Sep 2026 from accounts with no role on the app or the Page
+- The app must stay **Published** (privacy policy in a public Google Doc)
+- Don't brand the account or Meta business "CDA" (Meta restricted an account named "CDA Customer Care")
+- **Switching account or Page**: new token in the app → update the ID and token variables on Vercel
+  → set the webhook in the app → update the buttons in `src/components/ChannelLinks.tsx`
+
+**Make.com (backup only):** the old scenarios **IG – Instagram in** (7456234) and **IG – Ellie reply
+out** (7456248) are switched **off** and kept as a backup; Make's free plan allows only 2 active
+scenarios, which is why Messenger was built in the web app first.
 
 ---
 
@@ -299,8 +273,7 @@ Conversation ends → post-call webhook → one short note (max 400 characters)
 | Telegram | Chat id inside the conversation id: `…_tg_6486763839` (undocumented ending) |
 | Email | The web app registers the conversation to the sender when it hands the email to Ellie; `customer_lookup` waits up to ~1 s for that. Old Freshdesk conversations: `…_fd_<ticket>` |
 | Website | Registered when the session starts: signed-in account, else the `cda_visitor` cookie |
-| Instagram | `instagram_id` that Make sends is read from the stored ElevenLabs conversation (Custom Channel only) |
-| Messenger | The web app registers the conversation to the sender (Page-scoped id) and keeps it in `messenger_threads` |
+| Instagram, Messenger | The web app registers the conversation to the sender and keeps it in `instagram_threads` / `messenger_threads`. (Conversations from the Make days: `instagram_id` read from the stored conversation) |
 | Slack | Not wired up (`integration__slack_user_id` exists) |
 
 > **Never bind a tool parameter to a channel-specific dynamic variable, and never give an
@@ -401,15 +374,16 @@ characters are shown.
 | `/api/agent/post-call` | ElevenLabs post-call webhook | HMAC signature (`ELEVENLABS_WEBHOOK_SECRET`) |
 | `/api/email/gmail-push` | Google Pub/Sub | `?token=` `GMAIL_PUSH_SECRET` |
 | `/api/email/ellie-reply` | ElevenLabs (email replies) | HMAC signature (`EMAIL_CHANNEL_SIGNING_SECRET`) |
-| `/api/email/gmail-watch` | Vercel Cron, daily | `Bearer CRON_SECRET` (or the push secret) |
-| `/api/messenger/webhook` | Meta (Messenger) | `?token=` `MESSENGER_WEBHOOK_SECRET` (+ Meta signature if `META_APP_SECRET` is set) |
-| `/api/messenger/reply` | ElevenLabs (Messenger replies) | HMAC signature (`MESSENGER_CHANNEL_SIGNING_SECRET`) |
+| `/api/cron/daily` | Vercel Cron, 06:00 UTC: renews the Gmail watch, refreshes the Instagram token | `Bearer CRON_SECRET` |
+| `/api/email/gmail-watch` | By hand, to restart the Gmail watch | `Bearer CRON_SECRET` or the push secret |
+| `/api/instagram/webhook`, `/api/messenger/webhook` | Meta | `?token=` `INSTAGRAM_WEBHOOK_SECRET` / `MESSENGER_WEBHOOK_SECRET` (+ Meta signature if `META_APP_SECRET` is set) |
+| `/api/instagram/reply`, `/api/messenger/reply` | ElevenLabs (replies) | HMAC signature (`INSTAGRAM_CHANNEL_SIGNING_SECRET` / `MESSENGER_CHANNEL_SIGNING_SECRET`) |
 | `/api/email/mode`, `/api/admin/*` | `/admin` | Aida staff token |
 | `/api/aida/*` | Aida rooms | Staff token, room ticket, or nothing for customers (each route checks) |
 | `/api/elevenlabs/*`, `/api/anam/session`, `/api/account`, `/api/transcript/email` | Customer site | Site password |
 
 **Main files**: `src/components/AssistantApp.tsx` (tabs) · `src/lib/customers.ts` (memory) ·
-`src/lib/emailInbox.ts`, `gmail.ts`, `emailParse.ts`, `emailMode.ts` (email) · `src/lib/messenger.ts` (Messenger) · `src/lib/aida.ts`,
+`src/lib/emailInbox.ts`, `gmail.ts`, `emailParse.ts`, `emailMode.ts` (email) · `src/lib/metaChat.ts`, `instagram.ts`, `messenger.ts` (Instagram, Messenger) · `src/lib/aida.ts`,
 `livekit.ts`, `src/components/aida/` (rooms) · `src/components/admin/`, `src/lib/adminData.ts`,
 `anthropic.ts` (admin) · `supabase/schema.sql` · `vercel.json` (cron).
 
@@ -428,10 +402,13 @@ characters are shown.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` | Gmail API |
 | `GMAIL_PUBSUB_TOPIC`, `GMAIL_PUSH_SECRET`, `CRON_SECRET` | Gmail push and its daily renewal |
 | `EMAIL_CHANNEL_INBOUND_URL`, `EMAIL_CHANNEL_INBOUND_SECRET`, `EMAIL_CHANNEL_SIGNING_SECRET` | "CDA email" Custom Channel |
+| `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID` | Instagram: starting token (then refreshed in Supabase) and account ID |
+| `INSTAGRAM_WEBHOOK_SECRET` | Secret in the Instagram Callback URL, also the Verify token |
+| `INSTAGRAM_CHANNEL_INBOUND_URL`, `INSTAGRAM_CHANNEL_INBOUND_SECRET`, `INSTAGRAM_CHANNEL_SIGNING_SECRET` | "CDA Instagram" Custom Channel |
 | `MESSENGER_PAGE_TOKEN`, `MESSENGER_PAGE_ID` | Messenger: the Page token and Page ID |
 | `MESSENGER_WEBHOOK_SECRET` | Secret in the Meta Callback URL, also the Verify token |
 | `MESSENGER_CHANNEL_INBOUND_URL`, `MESSENGER_CHANNEL_INBOUND_SECRET`, `MESSENGER_CHANNEL_SIGNING_SECRET` | "CDA Messenger" Custom Channel |
-| `META_APP_SECRET` (optional) | Also check Meta's signature on Messenger webhooks |
+| `META_APP_SECRET` (optional) | Also check Meta's signature on Instagram and Messenger webhooks |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Insights on `/admin` |
 | `FRESHDESK_API_KEY`, `FRESHDESK_SUBDOMAIN` | Only to recognise old Freshdesk conversations; can go once Freshdesk is closed |
 
@@ -443,11 +420,9 @@ characters are shown.
 |---|---|---|
 | All `.env` keys above | Vercel + `.env.local` | Never committed (public repo) |
 | Telegram bot token | ElevenLabs Telegram connection | From @BotFather |
-| Instagram token | Make "IG – Ellie reply out" header (copy `INSTAGRAM_ACCESS_TOKEN` in `.env.local`) | **Expires ~20 Nov 2026** |
-| Instagram Custom Channel secrets | ElevenLabs trigger; input secret in Make's HTTP header | |
-| Meta webhook verify token | Make filter "Meta verification" + Meta app | |
+| Instagram token | Supabase `channel_tokens` (refreshed every 7 days); starting token in `INSTAGRAM_ACCESS_TOKEN` | Never runs out while the daily cron runs |
 | Google Drive access | ElevenLabs Google Drive integration | Read-only, picked files |
-| Make API token `claude-setup` | Make → Profile → API access | Delete when no longer needed |
+| Make API token `claude-setup` | Make → Profile → API access | Make is only a switched-off backup now → delete when no longer needed |
 | Slack bot token + signing secret | ElevenLabs Slack connection (when built) | |
 
 **Shared in chat → rotate after the demo:** ElevenLabs, Anam, Supabase service role, LiveKit, Google
@@ -461,10 +436,9 @@ token, Messenger Page token, Anthropic, Freshdesk; delete the Make API token.
 | When | What |
 |---|---|
 | **Now** | Remove the old **Freshdesk** trigger from Ellie (Channels → Freshdesk), so no email can get two answers |
-| Daily, automatic | Vercel Cron renews the Gmail watch |
+| Daily, automatic | Vercel Cron renews the Gmail watch and refreshes the Instagram token (every 7 days) |
 | ~17th each month | ElevenLabs credits reset (next 17 Oct 2026) |
-| Monthly | Make free operations reset; Anam gives 30 avatar minutes |
-| **Before ~20 Nov 2026** | Refresh the Instagram token (section 5) and update the Make reply header |
+| Monthly | Anam gives 30 avatar minutes |
 | After 20 Dec 2026, if Messenger stops | Generate the Page token again in the Meta app and update `MESSENGER_PAGE_TOKEN` |
 | When CDA content changes | Replace the PDFs in Drive (auto sync) |
 | After the demo | Rotate the keys listed in section 11 |
@@ -512,9 +486,7 @@ token, Messenger Page token, Anthropic, Freshdesk; delete the Make API token.
 | Email labelled **Failed** | Reason on `/admin` → Email. "invalid_grant" → run the Gmail consent again |
 | A customer's email labelled **Skipped** | Answer by hand; adjust `src/lib/emailParse.ts` if it repeats |
 | A customer gets two answers to one email | The Freshdesk trigger is still on Ellie → remove it |
-| Instagram DMs don't arrive | App not **Published**, account not subscribed to `messages`, or webhook not verified |
-| Instagram: Ellie answers, nothing is sent | Token expired → refresh it (section 5) |
-| Messenger: no answer | Webhook verified and Page subscribed to **messages**? Page token still valid? Vercel logs for `messenger` |
+| Instagram or Messenger: no answer | App **Published**? Webhook verified and `messages` subscribed? Token valid (Instagram: `channel_tokens`, see `/api/cron/daily` in the Vercel logs)? Vercel logs for `instagram` / `messenger` |
 | Make: "Maximum number of active scenarios" | Free plan = 2 active scenarios (both Instagram) → build in the web app or upgrade |
 | Meta: "Insufficient developer role" | Add the account as **Instagram Tester** and accept at instagram.com/accounts/manage_access |
 | Avatar call won't start | Browser console (F12) and Vercel logs; check `ANAM_*`, input format PCM 16000 Hz, 3-minute limit |

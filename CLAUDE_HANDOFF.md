@@ -20,7 +20,7 @@ for staff, and Aida rooms draft answers for staff on live calls.
 |---|---|---|
 | Telegram @CDA_2026_Support_Bot | ✅ Live | Native ElevenLabs Telegram trigger |
 | Email cda_domestic_appliances@new-digital-intelligence.com | ✅ Live (21 Sep) | Gmail push → web app → Ellie's "CDA email" Custom Channel → sent, or a Gmail draft (`email_mode` on Aida). Freshdesk no longer used |
-| Instagram DMs @new_digital_intelligence | ✅ Live (new account + new Meta app, 21 Sep) | Make.com scenarios + ElevenLabs Custom Channel |
+| Instagram DMs @new_digital_intelligence | ✅ Live | Meta webhook → web app (`src/lib/metaChat.ts`) → Ellie's "CDA Instagram" Custom Channel; token auto-refreshed by the daily cron. Make scenarios switched off (backup) |
 | Facebook Messenger (Page "New Digital Intelligence") | ✅ Live 21 Sep (tested from an account with no role: works, no App Review) | Meta webhook → web app (`src/lib/messenger.ts`) → Ellie's "CDA Messenger" Custom Channel. Not Make: its free plan allows 2 active scenarios, both used by Instagram |
 | Hosted web page / QR code | ✅ Live | ElevenLabs talk-to link (not password protected) |
 | **This web app** (chat, file upload, voice, video avatar, Aida calls, channel links) | ✅ Live | Next.js on Vercel: https://cda-demo.vercel.app (site password) — customers only |
@@ -37,7 +37,7 @@ for staff, and Aida rooms draft answers for staff on live calls.
 - **Git commits:** author **HelmiDev03 <helmipaty@gmail.com>**, and **no `Co-Authored-By` trailer**. **Push straight after committing** — the user said (21 Sep 2026) not to wait for their confirmation. Vercel deploys `main` automatically, so a push is a deploy: build, type-check and lint first, and never push secrets (the repo is public).
 - **Don't spend credits testing.** Never start conversations with Ellie (chat, voice, avatar calls, simulate-conversation) or start avatar/phone sessions yourself. Free read-only API checks are fine. Give the user test questions with expected answers instead.
 - **One step at a time, simple English** (the user is not a native English speaker). Wait until a step is finished before the next.
-- **No bridge/workaround code for channels.** Prefer native ElevenLabs integrations or no-code tools (Make.com). The web app itself is the exception.
+- **Channels:** prefer native ElevenLabs integrations. Where there is none, the user chose (21 Sep 2026) to build the channel in the web app rather than Make.com: email, Instagram and Messenger all run there now.
 - **Verify before claiming a cause.** Use API checks, docs and logs; don't guess (e.g. plan limits).
 - When something fails in the browser (avatar, voice), ask the user for the **F12 → Console** output.
 
@@ -70,6 +70,7 @@ Create `.env.local` (git-ignored). Copy the values from **Vercel → project `cd
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` | Gmail API access to the CDA mailbox (email channel, server only) |
 | `GMAIL_PUBSUB_TOPIC` / `GMAIL_PUSH_SECRET` / `CRON_SECRET` | Gmail push topic, the secret in the Pub/Sub push URL, and the daily cron's secret |
 | `EMAIL_CHANNEL_INBOUND_URL` / `EMAIL_CHANNEL_INBOUND_SECRET` / `EMAIL_CHANNEL_SIGNING_SECRET` | Ellie's "CDA email" Custom Channel trigger |
+| `INSTAGRAM_ACCESS_TOKEN` / `INSTAGRAM_USER_ID` / `INSTAGRAM_WEBHOOK_SECRET` / `INSTAGRAM_CHANNEL_*` (3) | Instagram in the web app (starting token; refreshed copy lives in Supabase `channel_tokens`) |
 | `MESSENGER_PAGE_TOKEN` / `MESSENGER_PAGE_ID` / `MESSENGER_WEBHOOK_SECRET` / `MESSENGER_CHANNEL_*` (3) | Messenger Page token (never expires), Page ID, Meta Callback URL secret, "CDA Messenger" Custom Channel |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude Haiku (`claude-haiku-4-5`) for the customer insights on `/admin` |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project for Aida rooms (server only) |
@@ -139,8 +140,8 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
 **Anam** (free plan: 30 min/month, 3-min calls, 1 custom avatar) – avatar Sofia, Cara 4, supports horizontal and vertical.
 The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
 
-**Make.com** (eu1, free plan 1,000 operations/month): scenarios "IG – Instagram in" (7456234) and
-"IG – Ellie reply out" (7456248), data store `ig_conversations` (190081, 10-minute conversation window).
+**Make.com** (eu1, free plan: 2 active scenarios, 1,000 operations/month): no longer used. The old Instagram
+scenarios "IG – Instagram in" (7456234) and "IG – Ellie reply out" (7456248) are switched off as a backup.
 
 ---
 
@@ -195,5 +196,5 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
 | ~1 Oct 2026 | Freshdesk trial ends — email no longer uses it |
 | Daily, automatic | Vercel Cron renews the Gmail watch; if emails stop, open `/api/email/gmail-watch` with the push secret |
 | ~17 Oct 2026 | ElevenLabs credits reset |
-| Before ~20 Nov 2026 | **Refresh the Instagram token** (generated 21 Sep, 60 days max) and update the Make reply scenario header; the user may want this automated in Make |
+| Automatic | The Instagram token is refreshed every 7 days by `/api/cron/daily` (stored in Supabase `channel_tokens`) |
 | After the demo | Rotate keys that were shared in chat (ElevenLabs, Anam, **Supabase service role**, **LiveKit**, **Google OAuth client secret** + new Gmail consent, the email Custom Channel secrets, Freshdesk), delete the Make API token, delete the unused LiveAvatar API key/secret/voice agent |

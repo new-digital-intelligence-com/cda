@@ -169,3 +169,26 @@ create table if not exists messenger_threads (
 create index if not exists messenger_threads_conversation_idx on messenger_threads (conversation_id);
 
 alter table messenger_threads enable row level security;
+
+-- Instagram, the same way as Messenger (psid holds the person's Instagram-scoped id).
+create table if not exists instagram_threads (
+  psid            text primary key,
+  conversation_id text,
+  last_reply      text,
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists instagram_threads_conversation_idx on instagram_threads (conversation_id);
+
+alter table instagram_threads enable row level security;
+
+-- Tokens the web app renews itself: the Instagram token (60 days) is refreshed every 7 days by the
+-- daily cron. Only the service role key can read this table.
+create table if not exists channel_tokens (
+  channel      text primary key,               -- instagram
+  token        text not null,
+  refreshed_at timestamptz not null default now(),
+  expires_at   timestamptz
+);
+
+alter table channel_tokens enable row level security;
