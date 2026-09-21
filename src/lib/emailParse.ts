@@ -227,10 +227,22 @@ export function isSkip(reply: string): boolean {
   return /^\W*skip\W*$/i.test(reply.trim());
 }
 
-/** Email is plain text: take out any markdown that slipped through. */
+/**
+ * Ellie is handed the email under a small header ([Email to CDA customer care], From, Subject) and
+ * sometimes copies that header to the top of her answer. The customer should only see the answer.
+ */
+function withoutEchoedHeader(reply: string): string {
+  const lines = reply.split("\n");
+  let skip = 0;
+  while (skip < lines.length && (lines[skip].trim() === EMAIL_MARKER || /^(from|to|subject|date)\s*:/i.test(lines[skip].trim()))) {
+    skip++;
+  }
+  return skip ? lines.slice(skip).join("\n") : reply;
+}
+
+/** Email is plain text: take out any markdown that slipped through, and any copied header. */
 export function plainReply(reply: string): string {
-  return reply
-    .replace(/\r\n/g, "\n")
+  return withoutEchoedHeader(reply.replace(/\r\n/g, "\n").trim())
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/__(.+?)__/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
