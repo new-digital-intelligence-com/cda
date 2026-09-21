@@ -38,7 +38,7 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
 | Telegram **@CDA_2026_Support_Bot** | ✅ | Native ElevenLabs Telegram trigger |
 | Email **cda_domestic_appliances@new-digital-intelligence.com** | ✅ | Gmail push → web app → Custom Channel "CDA email" |
 | Instagram **@new_digital_intelligence** | ✅ | Meta webhook → web app → Custom Channel "CDA Instagram" |
-| Facebook Messenger, Page **New Digital Intelligence** | ✅ (21 Sep) | Meta webhook → web app → Custom Channel "CDA Messenger" |
+| Facebook Messenger, Page **New Digital Intelligence** | ✅ | Meta webhook → web app → Custom Channel "CDA Messenger" |
 | Hosted page / QR code | ✅ | ElevenLabs talk-to link (no password) |
 | Slack | ⏳ | Waiting for a Slack workspace (section 13) |
 | WhatsApp, phone number | ⏸ | Parked (section 13) |
@@ -52,7 +52,7 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
  Hosted page / QR ──────────────────────►┘
                                              │ 2 tools + post-call webhook
                                              ▼
- web app (Vercel) ── Supabase: customers, notes, email log, Aida rooms
+ web app (Vercel) ── Supabase: customers, notes, email log, Aida rooms, Instagram/Messenger threads
  Aida tab (customers) + /admin (staff) ── LiveKit calls, Aida drafts for staff
  Admin: Claude through the ElevenLabs connector (e.g. switch email replies to drafts)
 ```
@@ -161,7 +161,7 @@ Ellie's answer → /api/email/ellie-reply → reads email_mode on Aida
   variables used as `{{…}}` are shown)
 - **Supabase**: `email_messages` (one row per email: sender, subject, status, reason, conversation —
   never the text; the row also stops double replies) and `gmail_state` (how far the inbox was read)
-- **Gmail watch** lasts 7 days: Vercel Cron renews it daily at 06:00 UTC (`vercel.json`) and catches
+- **Gmail watch** lasts 7 days: the daily cron (`/api/cron/daily`, 06:00 UTC) renews it and catches
   up on anything missed. By hand: `GET /api/email/gmail-watch` with `Authorization: Bearer <GMAIL_PUSH_SECRET>`
 - The refresh token belongs to the mailbox: if its password changes or access is removed, email
   stops ("invalid_grant" in the logs) → run the Google consent again
@@ -203,9 +203,7 @@ Message ← Instagram / Messenger Send API ← /api/<instagram|messenger>/reply 
 - **Switching account or Page**: new token in the app → update the ID and token variables on Vercel
   → set the webhook in the app → update the buttons in `src/components/ChannelLinks.tsx`
 
-**Make.com (backup only):** the old scenarios **IG – Instagram in** (7456234) and **IG – Ellie reply
-out** (7456248) are switched **off** and kept as a backup; Make's free plan allows only 2 active
-scenarios, which is why Messenger was built in the web app first.
+The old Make.com scenarios for Instagram (7456234, 7456248) are switched **off** and kept only as a backup.
 
 ---
 
@@ -217,7 +215,7 @@ scenarios, which is why Messenger was built in the web app first.
   🎙️ **Voice** (WebRTC, live transcript) · 🧑‍💼 **Avatar** (below) · 📞 **Aida** (join a live call
   with CDA staff by code, or open a room — always as the customer, section 8)
 - **Your CDA account**: create an account, link channels with a code (section 7)
-- **Message Ellie on your app**: Email (Gmail compose), Telegram, Instagram @new_digital_intelligence
+- **Message Ellie on your app**: Email (Gmail compose), Telegram, Instagram, Messenger
 - **Email me this conversation** (chat, voice, avatar): the text comes from ElevenLabs' transcript,
   only the browser that had the conversation can send it, the session is ended first; one click for
   a signed-in customer. Sent from `gmail_sender`
@@ -255,7 +253,7 @@ Ellie recognises the same person on every channel and remembers what they asked.
 anyone to identify themselves**; someone she cannot place is simply helped.
 
 ```
-Website: create account → "+ Add a channel" → CDA-4F2K9M → send it from Telegram, Instagram or another email
+Website: create account → "+ Add a channel" → CDA-4F2K9M → send it from Telegram, Instagram, Messenger or another email
 Any conversation → customer_lookup(system__conversation_id) → known? greet by name, use the last 3 notes
 Conversation ends → post-call webhook → one short note (max 400 characters)
 ```
@@ -273,7 +271,7 @@ Conversation ends → post-call webhook → one short note (max 400 characters)
 | Telegram | Chat id inside the conversation id: `…_tg_6486763839` (undocumented ending) |
 | Email | The web app registers the conversation to the sender when it hands the email to Ellie; `customer_lookup` waits up to ~1 s for that. Old Freshdesk conversations: `…_fd_<ticket>` |
 | Website | Registered when the session starts: signed-in account, else the `cda_visitor` cookie |
-| Instagram, Messenger | The web app registers the conversation to the sender and keeps it in `instagram_threads` / `messenger_threads`. (Conversations from the Make days: `instagram_id` read from the stored conversation) |
+| Instagram, Messenger | The web app registers the conversation to the sender and keeps it in `instagram_threads` / `messenger_threads` |
 | Slack | Not wired up (`integration__slack_user_id` exists) |
 
 > **Never bind a tool parameter to a channel-specific dynamic variable, and never give an
@@ -400,7 +398,8 @@ characters are shown.
 | `AIDA_AGENT_ID`, `AIDA_STAFF_PASSWORD` | Aida agent, staff password (`/admin`) |
 | `gmail_sender`, `gmail_app_password` | Mailbox that sends conversation emails (lower-case names) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` | Gmail API |
-| `GMAIL_PUBSUB_TOPIC`, `GMAIL_PUSH_SECRET`, `CRON_SECRET` | Gmail push and its daily renewal |
+| `GMAIL_PUBSUB_TOPIC`, `GMAIL_PUSH_SECRET` | Gmail push |
+| `CRON_SECRET` | The daily cron: renews the Gmail watch, refreshes the Instagram token |
 | `EMAIL_CHANNEL_INBOUND_URL`, `EMAIL_CHANNEL_INBOUND_SECRET`, `EMAIL_CHANNEL_SIGNING_SECRET` | "CDA email" Custom Channel |
 | `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID` | Instagram: starting token (then refreshed in Supabase) and account ID |
 | `INSTAGRAM_WEBHOOK_SECRET` | Secret in the Instagram Callback URL, also the Verify token |
@@ -423,7 +422,6 @@ characters are shown.
 | Instagram token | Supabase `channel_tokens` (refreshed every 7 days); starting token in `INSTAGRAM_ACCESS_TOKEN` | Never runs out while the daily cron runs |
 | Google Drive access | ElevenLabs Google Drive integration | Read-only, picked files |
 | Make API token `claude-setup` | Make → Profile → API access | Make is only a switched-off backup now → delete when no longer needed |
-| Slack bot token + signing secret | ElevenLabs Slack connection (when built) | |
 
 **Shared in chat → rotate after the demo:** ElevenLabs, Anam, Supabase service role, LiveKit, Google
 OAuth client secret (then run the Gmail consent again), the three Custom Channel secret sets, Instagram
@@ -435,7 +433,7 @@ token, Messenger Page token, Anthropic, Freshdesk; delete the Make API token.
 
 | When | What |
 |---|---|
-| **Now** | Remove the old **Freshdesk** trigger from Ellie (Channels → Freshdesk), so no email can get two answers |
+| **Now** | Remove the old **Freshdesk** trigger from Ellie (Channels → Freshdesk), so no email can get two answers, and the old Instagram Custom Channel trigger (Reply URL pointing to Make) if it is still there |
 | Daily, automatic | Vercel Cron renews the Gmail watch and refreshes the Instagram token (every 7 days) |
 | ~17th each month | ElevenLabs credits reset (next 17 Oct 2026) |
 | Monthly | Anam gives 30 avatar minutes |
@@ -487,7 +485,6 @@ token, Messenger Page token, Anthropic, Freshdesk; delete the Make API token.
 | A customer's email labelled **Skipped** | Answer by hand; adjust `src/lib/emailParse.ts` if it repeats |
 | A customer gets two answers to one email | The Freshdesk trigger is still on Ellie → remove it |
 | Instagram or Messenger: no answer | App **Published**? Webhook verified and `messages` subscribed? Token valid (Instagram: `channel_tokens`, see `/api/cron/daily` in the Vercel logs)? Vercel logs for `instagram` / `messenger` |
-| Make: "Maximum number of active scenarios" | Free plan = 2 active scenarios (both Instagram) → build in the web app or upgrade |
 | Meta: "Insufficient developer role" | Add the account as **Instagram Tester** and accept at instagram.com/accounts/manage_access |
 | Avatar call won't start | Browser console (F12) and Vercel logs; check `ANAM_*`, input format PCM 16000 Hz, 3-minute limit |
 | Voice widget test "draft_from_user_id" | Use the Inline test mode or refresh |
