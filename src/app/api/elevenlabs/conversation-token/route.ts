@@ -15,7 +15,7 @@ export async function GET() {
     // Tie this conversation to the visitor now, so Ellie's lookup recognises them.
     await registerWebsiteConversation(conversation_id);
 
-    return Response.json({ conversationToken: token });
+    return Response.json({ conversationToken: token, conversationId: conversation_id ?? null });
   } catch (error) {
     console.error(error);
     return Response.json({ error: "Could not start a voice session" }, { status: 502 });

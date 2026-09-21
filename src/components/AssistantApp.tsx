@@ -3,6 +3,7 @@
 import { ConversationProvider, useConversation } from "@elevenlabs/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AvatarPanel } from "./AvatarPanel";
+import { EmailTranscriptForm, postEmail } from "./EmailTranscriptForm";
 import { MessageBubble, TypingIndicator } from "./MessageBubble";
 import { VoiceOrb } from "./VoiceOrb";
 import {
@@ -44,6 +45,8 @@ function Assistant() {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  /** The ElevenLabs conversation on screen, so its transcript can be emailed. */
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   const sessionKindRef = useRef<AssistantMode | null>(null);
   const pendingRef = useRef<PendingMessage | null>(null);
@@ -133,7 +136,11 @@ function Assistant() {
     setError(null);
     const response = await fetch("/api/elevenlabs/signed-url");
     if (!response.ok) throw new Error("Could not start a chat session.");
-    const { signedUrl } = (await response.json()) as { signedUrl: string };
+    const { signedUrl, conversationId: id } = (await response.json()) as {
+      signedUrl: string;
+      conversationId?: string | null;
+    };
+    setConversationId(id ?? null);
     sessionKindRef.current = "chat";
     pendingRef.current = withPending;
     skipGreetingRef.current = withPending !== null;
@@ -159,7 +166,11 @@ function Assistant() {
       setError("Could not start a voice session. Please try again.");
       return;
     }
-    const { conversationToken } = (await response.json()) as { conversationToken: string };
+    const { conversationToken, conversationId: id } = (await response.json()) as {
+      conversationToken: string;
+      conversationId?: string | null;
+    };
+    setConversationId(id ?? null);
     sessionKindRef.current = "voice";
     setMessages([]);
     conversation.startSession({ conversationToken, connectionType: "webrtc" });
@@ -169,9 +180,17 @@ function Assistant() {
     if (status !== "disconnected") conversation.endSession();
   }
 
+  /** Ends the conversation first, so ElevenLabs' transcript (what we email) has every message. */
+  async function emailTranscript(email: string) {
+    if (!conversationId) throw new Error("There is no conversation to send yet.");
+    if (status !== "disconnected") await conversation.endSession();
+    await postEmail("/api/transcript/email", { conversationId, email });
+  }
+
   function switchMode(next: AssistantMode) {
     if (next === mode) return;
     endSession();
+    setConversationId(null);
     setMessages([]);
     setFiles([]);
     setError(null);
@@ -336,15 +355,25 @@ function Assistant() {
               </button>
             </form>
             {messages.length > 0 && (
-              <button
-                onClick={() => {
-                  endSession();
-                  setMessages([]);
-                }}
-                className="mt-2 text-xs text-cda-text underline hover:text-cda-red"
-              >
-                Start a new conversation
-              </button>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <button
+                  onClick={() => {
+                    endSession();
+                    setConversationId(null);
+                    setMessages([]);
+                  }}
+                  className="text-xs text-cda-text underline hover:text-cda-red"
+                >
+                  Start a new conversation
+                </button>
+                {conversationId && (
+                  <EmailTranscriptForm
+                    key={conversationId}
+                    onSend={emailTranscript}
+                    note="The chat ends first, so the email has every message."
+                  />
+                )}
+              </div>
             )}
           </div>
         </>
@@ -403,6 +432,15 @@ function Assistant() {
             )}
             <div ref={listEndRef} />
           </div>
+          {conversationId && messages.length > 0 && (
+            <div className="border-t border-cda-grey bg-white px-4 py-3">
+              <EmailTranscriptForm
+                key={conversationId}
+                onSend={emailTranscript}
+                note={connected ? "The call ends first, so the email has everything that was said." : undefined}
+              />
+            </div>
+          )}
         </div>
       ) : (
         <AvatarPanel />

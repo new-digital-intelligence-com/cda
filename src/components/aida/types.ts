@@ -33,6 +33,16 @@ export type Suggestion = {
 
 export type Person = { identity: string; name: string; role: AidaRole; speaking: boolean; isMe: boolean };
 
+/** Joining a room that has ended: it cannot be joined any more, only its history read. */
+export class RoomClosedError extends Error {
+  code: string;
+
+  constructor(code: string) {
+    super("This room has ended.");
+    this.code = code;
+  }
+}
+
 /**
  * Joining and creating rooms share one response shape. Sending the staff token is what makes the
  * server treat this person as CDA staff; without it they are a customer.
@@ -47,7 +57,11 @@ export async function requestRoom(
     headers: { "Content-Type": "application/json", ...(staffToken ? { "x-aida-staff": staffToken } : {}) },
     body: JSON.stringify(body),
   });
-  const result = (await response.json().catch(() => ({}))) as Partial<JoinedRoom> & { error?: string };
+  const result = (await response.json().catch(() => ({}))) as Partial<JoinedRoom> & {
+    error?: string;
+    closed?: boolean;
+  };
+  if (result.closed && result.room) throw new RoomClosedError(result.room.code);
   if (!response.ok || !result.ticket || !result.room) {
     throw new Error(result.error ?? "Something went wrong. Please try again.");
   }

@@ -34,7 +34,8 @@ export async function POST(request: Request) {
     });
 
     // Tie this avatar call to the visitor, so Ellie recognises them here too.
-    await registerWebsiteConversation(conversationIdFromSignedUrl(signed_url));
+    const conversationId = conversationIdFromSignedUrl(signed_url);
+    await registerWebsiteConversation(conversationId);
 
     const response = await fetch("https://api.anam.ai/v1/auth/session-token", {
       method: "POST",
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
       console.error("Anam session token failed", response.status, body.message);
       return Response.json({ error: "Could not start the avatar" }, { status: 502 });
     }
-    return Response.json({ sessionToken: body.sessionToken, maxSeconds });
+    return Response.json({ sessionToken: body.sessionToken, maxSeconds, conversationId });
   } catch (error) {
     console.error(error);
     return Response.json({ error: "Could not start the avatar" }, { status: 502 });

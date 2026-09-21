@@ -1,4 +1,14 @@
-import { cleanText, createRoom, displayCode, listOpenRooms, livekitRoomName } from "@/lib/aida";
+import {
+  cleanText,
+  createRoom,
+  displayCode,
+  listClosedRooms,
+  listOpenRooms,
+  livekitRoomName,
+  setRoomCustomer,
+  type AidaRoom,
+} from "@/lib/aida";
+import { whoIsAsking } from "@/lib/aidaAccess";
 import { isStaffRequest } from "@/lib/aidaStaff";
 import { livekitConfigured, roomTicket } from "@/lib/livekit";
 import { supabaseConfigured } from "@/lib/supabase";
@@ -7,21 +17,22 @@ import { supabaseConfigured } from "@/lib/supabase";
 // create rooms too. Who you are is decided here and nowhere else: a valid Aida staff token makes
 // you CDA staff, anything else makes you a customer. The name you type is only a label.
 
-/** The staff lobby: every open room. */
+const summary = (room: AidaRoom) => ({
+  code: displayCode(room.code),
+  title: room.title,
+  createdByRole: room.created_by_role,
+  createdByName: room.created_by_name,
+  createdAt: room.created_at,
+  closedAt: room.closed_at ?? room.expires_at,
+});
+
+/** The staff lobby: every open room, and recently finished ones whose history can still be read. */
 export async function GET(request: Request) {
   if (!(await isStaffRequest(request))) return Response.json({ error: "Unauthorized" }, { status: 401 });
   if (!supabaseConfigured()) return Response.json({ error: "Rooms are not configured" }, { status: 503 });
 
-  const rooms = await listOpenRooms();
-  return Response.json({
-    rooms: rooms.map((room) => ({
-      code: displayCode(room.code),
-      title: room.title,
-      createdByRole: room.created_by_role,
-      createdByName: room.created_by_name,
-      createdAt: room.created_at,
-    })),
-  });
+  const [open, closed] = await Promise.all([listOpenRooms(), listClosedRooms()]);
+  return Response.json({ rooms: open.map(summary), closed: closed.map(summary) });
 }
 
 /** Create a room and get a ticket into it. */
@@ -31,14 +42,16 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const name = cleanText(body.name, 40);
+  const { role, account } = await whoIsAsking(request);
+  // A customer signed in to their CDA account is not asked for a name: we already know it.
+  const name = cleanText(body.name, 40) || cleanText(account?.name, 40);
   if (!name) return Response.json({ error: "Please enter your name" }, { status: 400 });
 
-  const role = (await isStaffRequest(request)) ? "employee" : "customer";
   const title = cleanText(body.title, 60) || (role === "customer" ? `Help for ${name}` : null);
 
   try {
     const room = await createRoom(title, role, name);
+    if (account) await setRoomCustomer(room.id, account.id);
     const ticket = await roomTicket(livekitRoomName(room), name, role);
     return Response.json({ room: { code: displayCode(room.code), title: room.title }, ticket });
   } catch (error) {

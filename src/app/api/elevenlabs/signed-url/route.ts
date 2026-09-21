@@ -13,9 +13,10 @@ export async function GET() {
     });
 
     // Tie this conversation to the visitor now, so Ellie's lookup recognises them.
-    await registerWebsiteConversation(conversationIdFromSignedUrl(signed_url));
+    const conversationId = conversationIdFromSignedUrl(signed_url);
+    await registerWebsiteConversation(conversationId);
 
-    return Response.json({ signedUrl: signed_url });
+    return Response.json({ signedUrl: signed_url, conversationId });
   } catch (error) {
     console.error(error);
     return Response.json({ error: "Could not start a chat session" }, { status: 502 });

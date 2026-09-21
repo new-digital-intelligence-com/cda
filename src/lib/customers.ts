@@ -288,3 +288,17 @@ export async function addNote(conversationId: string, summary: string): Promise<
   });
   return true;
 }
+
+/** A note written by us rather than the post-call webhook, for example after an Aida call. */
+export async function addCustomerNote(customerId: string, channel: string, summary: string) {
+  await rest("customer_notes", {
+    method: "POST",
+    prefer: "return=minimal",
+    body: JSON.stringify({ customer_id: customerId, channel, summary: summary.slice(0, 400) }),
+  });
+}
+
+export async function getCustomer(customerId: string): Promise<Customer | null> {
+  const rows = await rest<Customer[]>(`customers?id=eq.${q(customerId)}&select=id,name&limit=1`);
+  return rows[0] ?? null;
+}

@@ -90,6 +90,10 @@ create table if not exists aida_rooms (
 
 create index if not exists aida_rooms_open_idx on aida_rooms (status, created_at desc);
 
+-- The customer in the room, when they joined signed in to their CDA account: Aida then gets what we
+-- remember about them, and the call is added to their memory when the room is closed.
+alter table aida_rooms add column if not exists customer_id uuid references customers (id) on delete set null;
+
 -- Everything said, typed, suggested and decided in a room, in order. The author comes from the
 -- signed room ticket on the server, never from what the browser claims.
 create table if not exists aida_events (

@@ -26,6 +26,23 @@ export async function realtimeScribeToken(): Promise<string> {
   return ((await response.json()) as { token: string }).token;
 }
 
+export type ConversationRecord = {
+  status: "initiated" | "in-progress" | "processing" | "done" | "failed";
+  transcript?: { role: "user" | "agent"; message: string | null }[];
+  metadata?: { start_time_unix_secs?: number; text_only?: boolean };
+};
+
+/** One conversation with its transcript, as ElevenLabs stored it. Free to read. */
+export async function elevenLabsConversation(conversationId: string): Promise<ConversationRecord> {
+  const { apiKey } = credentials();
+  const response = await fetch(`${API_BASE}/conversations/${encodeURIComponent(conversationId)}`, {
+    headers: { "xi-api-key": apiKey },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`ElevenLabs conversation lookup failed with ${response.status}`);
+  return (await response.json()) as ConversationRecord;
+}
+
 /**
  * Calls an ElevenLabs endpoint with the server-side API key and returns its JSON body. It targets
  * Ellie unless `params.agent_id` names another agent, such as Aida.

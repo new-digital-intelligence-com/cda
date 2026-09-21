@@ -67,6 +67,7 @@ Create `.env.local` (git-ignored). Copy the values from **Vercel → project `cd
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project for Aida rooms (server only) |
 | `AIDA_AGENT_ID` | The Aida copilot agent, `agent_2601m31rbrn8emrbfe8vgxgxdta9` |
 | `AIDA_STAFF_PASSWORD` | Aida's own staff password; the site password does **not** make anyone staff |
+| `gmail_sender` / `gmail_app_password` | Gmail mailbox + app password that send conversation emails (lower-case names) |
 
 ```bash
 npm run dev      # http://localhost:3000
@@ -140,6 +141,9 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
    variables on Vercel, push, and a real call tested by the user (voice + transcript + drafts).
    The Vercel MCP connector is on another account ("Medi" team) and cannot see `cda-demo`.
    Staff are decided by the separate Aida password (`AIDA_STAFF_PASSWORD`), kept per browser tab.
+   Closed rooms are read-only forever and can be emailed; signed-in customers are recognised and
+   their history is given to Aida (needs `aida_rooms.customer_id` — run `supabase/schema.sql` again).
+   Website chat/voice/avatar can also be emailed (`src/app/api/transcript/email`).
 1. **Slack** – waiting for the user:
    - The "New Digital Intelligence" Slack workspace hit the free plan's 10-app limit → use a new demo workspace or remove an unused app.
    - User creates the **CDA_Support** app from the manifest in CHANNEL_SETUP.md §10, installs it, and gives the **Bot User OAuth Token** + **Signing Secret** and the mode (mention-only or all messages).

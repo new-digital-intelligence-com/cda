@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AidaHistory } from "./AidaHistory";
 import { AidaRoom } from "./AidaRoom";
 import {
   rememberName,
   rememberStaffToken,
+  RoomClosedError,
   requestRoom,
   savedName,
   savedStaffToken,
@@ -18,7 +20,10 @@ type OpenRoom = {
   createdByRole: "employee" | "customer";
   createdByName: string | null;
   createdAt: string;
+  closedAt: string;
 };
+
+type RoomLists = { open: OpenRoom[]; closed: OpenRoom[] };
 
 const REFRESH_MS = 10_000;
 
@@ -149,21 +154,24 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [code, setCode] = useState("");
-  const [rooms, setRooms] = useState<OpenRoom[]>([]);
+  const [rooms, setRooms] = useState<RoomLists>({ open: [], closed: [] });
+  /** A room whose read-only history is on screen. */
+  const [viewing, setViewing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nameMissing, setNameMissing] = useState(false);
   const [busy, setBusy] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  const loadRooms = useCallback(async () => {
+  const loadRooms = useCallback(async (): Promise<RoomLists> => {
     const response = await fetch("/api/aida/rooms", { headers: { "x-aida-staff": staffToken } });
     // The password was changed or the sign-in expired: back to the password screen.
     if (response.status === 401) {
       onSignOut();
-      return [];
+      return { open: [], closed: [] };
     }
-    if (!response.ok) return [];
-    return ((await response.json()) as { rooms: OpenRoom[] }).rooms;
+    if (!response.ok) return { open: [], closed: [] };
+    const body = (await response.json()) as { rooms: OpenRoom[]; closed?: OpenRoom[] };
+    return { open: body.rooms, closed: body.closed ?? [] };
   }, [staffToken, onSignOut]);
 
   useEffect(() => {
@@ -171,8 +179,8 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
     const nameTimer = setTimeout(() => setName((current) => current || savedName()), 0);
     const refresh = () =>
       loadRooms()
-        .then((list) => {
-          if (!cancelled) setRooms(list);
+        .then((lists) => {
+          if (!cancelled) setRooms(lists);
         })
         .catch(() => {});
     refresh();
@@ -198,7 +206,9 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
       rememberName(cleanName);
       setJoined(await requestRoom(path, { ...body, name: cleanName }, staffToken));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      // A room that has ended cannot be joined, but its history can be read.
+      if (err instanceof RoomClosedError) setViewing(err.code);
+      else setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setBusy(false);
     }
@@ -218,6 +228,19 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
     setBusy(false);
   }
 
+  if (viewing) {
+    return (
+      <AidaHistory
+        code={viewing}
+        staffToken={staffToken}
+        onBack={() => {
+          setViewing(null);
+          void loadRooms().then(setRooms).catch(() => {});
+        }}
+      />
+    );
+  }
+
   if (joined) {
     return (
       <AidaRoom
@@ -226,12 +249,16 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
           setJoined(null);
           void loadRooms().then(setRooms).catch(() => {});
         }}
+        onViewHistory={() => {
+          setViewing(joined.room.code);
+          setJoined(null);
+        }}
       />
     );
   }
 
-  const waiting = rooms.filter((room) => room.createdByRole === "customer");
-  const staffRooms = rooms.filter((room) => room.createdByRole === "employee");
+  const waiting = rooms.open.filter((room) => room.createdByRole === "customer");
+  const staffRooms = rooms.open.filter((room) => room.createdByRole === "employee");
 
   return (
     <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
@@ -338,6 +365,7 @@ function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () =>
           onJoin={(roomCode) => void enter("/api/aida/join", { code: roomCode })}
           onClose={(roomCode) => void closeRoom(roomCode)}
         />
+        <ClosedRoomList rooms={rooms.closed} onView={setViewing} />
         <p className="text-xs text-cda-text">
           To test as a customer, open the room&apos;s invite link in a new tab. Staff sign-in only applies to
           this tab, so the new tab joins as the customer.
@@ -405,6 +433,42 @@ function RoomList({
                   Join
                 </button>
               </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Rooms that have ended: read-only, never reopened, but their history can be read and emailed. */
+function ClosedRoomList({ rooms, onView }: { rooms: OpenRoom[]; onView: (code: string) => void }) {
+  return (
+    <div className="rounded-xl bg-white p-5 shadow-sm">
+      <h2 className="font-semibold text-cda-dark">
+        Closed rooms <span className="text-sm font-normal text-cda-text">({rooms.length})</span>
+      </h2>
+      {rooms.length === 0 ? (
+        <p className="mt-2 text-sm text-cda-text">No closed rooms yet.</p>
+      ) : (
+        <ul className="mt-3 max-h-80 space-y-2 overflow-y-auto">
+          {rooms.map((room) => (
+            <li key={room.code} className="flex items-center justify-between gap-3 rounded-lg bg-cda-grey-light px-3 py-2">
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-cda-dark">{room.title ?? "Untitled room"}</span>
+                <span className="block text-xs text-cda-text">
+                  {room.code} · {room.createdByRole === "customer" ? "customer" : "staff"} room by{" "}
+                  {room.createdByName ?? "someone"} · ended{" "}
+                  {new Date(room.closedAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => onView(room.code)}
+                className="shrink-0 rounded-full border border-cda-grey bg-white px-4 py-1.5 text-xs font-semibold text-cda-dark"
+              >
+                View
+              </button>
             </li>
           ))}
         </ul>

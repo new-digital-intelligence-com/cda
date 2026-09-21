@@ -34,7 +34,12 @@ function roleOf(participant: Participant): AidaRole {
   return participant.attributes?.role === "employee" ? "employee" : "customer";
 }
 
-type Props = { joined: JoinedRoom; onLeave: () => void };
+type Props = {
+  joined: JoinedRoom;
+  onLeave: () => void;
+  /** Opens the room's read-only history (with the email option) once the room has ended. */
+  onViewHistory?: () => void;
+};
 
 export function AidaRoom(props: Props) {
   return (
@@ -44,7 +49,7 @@ export function AidaRoom(props: Props) {
   );
 }
 
-function RoomView({ joined, onLeave }: Props) {
+function RoomView({ joined, onLeave, onViewHistory }: Props) {
   const { ticket, room: info } = joined;
   const isEmployee = ticket.role === "employee";
 
@@ -60,6 +65,8 @@ function RoomView({ joined, onLeave }: Props) {
   const [draft, setDraft] = useState("");
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Set when the customer is signed in to their CDA account and Aida has been given their history. */
+  const [knownCustomer, setKnownCustomer] = useState<string | null>(null);
 
   const roomRef = useRef<Room | null>(null);
   const audioBoxRef = useRef<HTMLDivElement>(null);
@@ -72,6 +79,8 @@ function RoomView({ joined, onLeave }: Props) {
   /** Customer messages Aida still owes a draft for; anything she says unasked is ignored. */
   const pendingDraftsRef = useRef(0);
   const lastCustomerRef = useRef("the customer");
+  /** The customer background last handed to Aida, so it is sent once per Aida session. */
+  const contextSentRef = useRef("");
 
   // --- talking to our server and to the room ----------------------------------------------------
 
@@ -116,7 +125,9 @@ function RoomView({ joined, onLeave }: Props) {
   const copilot = useConversation({
     onConnect: () => {
       copilotReadyRef.current = true;
+      contextSentRef.current = "";
       handlersRef.current?.seedCopilot();
+      handlersRef.current?.shareCustomerContext();
     },
     onDisconnect: () => {
       copilotReadyRef.current = false;
@@ -145,6 +156,7 @@ function RoomView({ joined, onLeave }: Props) {
     onSpoken: (text: string) => void;
     onDraft: (message: string) => void;
     seedCopilot: () => void;
+    shareCustomerContext: () => void;
     copilotDropped: () => void;
     system: (text: string) => void;
     loadHistory: () => void;
@@ -283,6 +295,20 @@ function RoomView({ joined, onLeave }: Props) {
           .join("\n");
         copilotRef.current.sendContextualUpdate(`The call so far:\n${transcript}`);
       },
+      shareCustomerContext() {
+        // What CDA already knows about a signed-in customer (other channels, earlier calls), so
+        // Aida's drafts can build on it. Only the host runs Aida, so only the host asks.
+        if (!isHostRef.current || !copilotReadyRef.current) return;
+        void api("/api/aida/context")
+          .then((response) => (response.ok ? response.json() : null))
+          .then((context: { known?: boolean; name?: string | null; text?: string } | null) => {
+            if (!context?.known || !context.text || context.text === contextSentRef.current) return;
+            contextSentRef.current = context.text;
+            copilotRef.current.sendContextualUpdate(context.text);
+            setKnownCustomer(context.name ?? "the customer");
+          })
+          .catch(() => {});
+      },
       copilotDropped() {
         // Aida's session has a time limit; a host keeps her running for as long as the room is open.
         if (isHostRef.current && roomRef.current?.state === "connected") {
@@ -348,6 +374,7 @@ function RoomView({ joined, onLeave }: Props) {
       .on(RoomEvent.ParticipantConnected, (p) => {
         refreshPeople();
         handlersRef.current?.system(`${p.name || "Someone"} joined`);
+        if (roleOf(p) === "customer") handlersRef.current?.shareCustomerContext();
       })
       .on(RoomEvent.ParticipantDisconnected, (p) => {
         refreshPeople();
@@ -494,9 +521,24 @@ function RoomView({ joined, onLeave }: Props) {
         <p className="mt-2 text-sm text-cda-text">
           {status === "error" ? "Please check your connection and try again." : endedMessage}
         </p>
-        <button type="button" onClick={onLeave} className="mt-4 rounded-lg bg-cda-red px-4 py-2 text-sm font-semibold text-white">
-          Back
-        </button>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          {status === "ended" && onViewHistory && (
+            <button
+              type="button"
+              onClick={onViewHistory}
+              className="rounded-lg bg-cda-red px-4 py-2 text-sm font-semibold text-white"
+            >
+              See the conversation &amp; email it
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onLeave}
+            className="rounded-lg border border-cda-grey px-4 py-2 text-sm font-semibold text-cda-dark"
+          >
+            Back
+          </button>
+        </div>
       </section>
     );
   }
@@ -627,6 +669,12 @@ function RoomView({ joined, onLeave }: Props) {
             <p className="text-xs text-cda-text">
               Only CDA staff see this. Approve a draft to send it to the customer in the chat.
             </p>
+            {knownCustomer && (
+              <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800">
+                <strong>{knownCustomer}</strong> is signed in to their CDA account. Aida has their earlier
+                conversations from other channels.
+              </p>
+            )}
 
             {pending.length === 0 && (
               <p className="rounded-lg bg-cda-grey-light p-3 text-sm text-cda-text">
@@ -713,7 +761,7 @@ function RoomView({ joined, onLeave }: Props) {
   );
 }
 
-function LineView({ line, showApprover }: { line: TimelineLine; showApprover: boolean }) {
+export function LineView({ line, showApprover }: { line: TimelineLine; showApprover: boolean }) {
   if (line.kind === "system") {
     return <p className="text-center text-xs text-cda-text">{line.text}</p>;
   }
@@ -763,7 +811,7 @@ function transcriptStatus({
   return "Live transcript off.";
 }
 
-type HistoryEvent = {
+export type HistoryEvent = {
   id: number;
   kind: "speech" | "chat" | "suggestion" | "approved" | "declined";
   author_identity: string;
@@ -774,7 +822,7 @@ type HistoryEvent = {
 };
 
 /** Rebuilds the timeline and the drafts from the saved record, for someone joining late. */
-function historyToState(events: HistoryEvent[], myIdentity: string) {
+export function historyToState(events: HistoryEvent[], myIdentity: string) {
   const lines: TimelineLine[] = [];
   const suggestions = new Map<string, Suggestion>();
   for (const event of events) {

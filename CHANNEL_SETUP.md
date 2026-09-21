@@ -343,6 +343,10 @@ If used on a real site, add the domain in **Security → Allowlist**.
 - **Other channels card**: buttons that open Email (Gmail compose to the support address), the Telegram bot and an Instagram DM (`src/components/ChannelLinks.tsx`)
 - **Your CDA account**: create an account and link Telegram, email and other channels to it with a
   short code, so Ellie recognises the same person everywhere (section 16)
+- **Email me this conversation**: under the chat, the voice transcript and after an avatar call. The
+  text comes from ElevenLabs' own transcript (`POST /api/transcript/email`), never from the browser,
+  and only the browser that had the conversation can send it. A chat or call is ended first, so the
+  email is complete. Sent from `gmail_sender`
 - **Password lock**: every page and API route requires `SITE_PASSWORD` (checked in `src/proxy.ts` and again in the API routes); site stays locked if the variable is missing
 
 ### Important files
@@ -376,6 +380,8 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project key and secret — server only |
 | `AIDA_AGENT_ID` | `agent_2601m31rbrn8emrbfe8vgxgxdta9`, the Aida copilot agent |
 | `AIDA_STAFF_PASSWORD` | Password that makes someone CDA staff in Aida rooms (separate from `SITE_PASSWORD`) |
+| `gmail_sender` | `cda_domestic_appliances@new-digital-intelligence.com` — sends conversation emails (lower-case name) |
+| `gmail_app_password` | Gmail app password for that mailbox (16 characters) — server only |
 
 After changing a variable on Vercel → **Redeploy**.
 
@@ -1004,3 +1010,35 @@ People talking to people through LiveKit uses **no** ElevenLabs voice credits.
    `AIDA_STAFF_PASSWORD` to `.env.local` **and** Vercel → Redeploy
 4. Test: `/aida` → staff password → Create room → Copy invite link → open it in a **new tab** as the
    customer. Headphones on both sides give the cleanest transcript.
+
+### After a room ends
+
+Closing is final: a closed room can **never be reopened**, and nothing more can be said, typed,
+transcribed or drafted in it (every route answers `410`). Its **history stays readable**:
+
+| Who | How |
+|---|---|
+| Staff | Lobby → **Closed rooms** → View (last 30), or "See the conversation & email it" when a room ends |
+| Customer | Anyone with the **room code**: joining an ended room opens its history instead |
+
+Staff see Aida's drafts and what was done with each; customers only see the conversation.
+
+**Email the history**: once a room has ended, anyone reading it can have it emailed to the address
+they type (`POST /api/aida/email`), from `gmail_sender`. Customers get the conversation; staff copies
+also list Aida's drafts. At most 10 emails per room, so the mailbox cannot be used for spam, and the
+recipient address is not stored.
+
+### Customers signed in to their CDA account
+
+If the customer's browser is signed in to their CDA account on the website (section 16):
+
+- they are **not asked for a name** — it comes from the account (`GET /api/aida/me`)
+- the room is linked to them (`aida_rooms.customer_id`), and the host employee's browser hands Aida
+  what CDA already knows about them from every channel (`GET /api/aida/context`), so her drafts
+  build on earlier conversations. Staff see a green "signed in to their CDA account" note
+- when the room is closed, the call is **added to their memory** as one line, for example
+  *"Live call with CDA staff on 21 September 2026: asked "My oven shows F3"; CDA sent 1 written
+  reply."* — so Ellie and Aida can refer to it next time, on any channel
+
+`aida_rooms.customer_id` was added after the table: run `supabase/schema.sql` again. Until then
+everything else works and the room simply has no known customer.

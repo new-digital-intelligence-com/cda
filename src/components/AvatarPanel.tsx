@@ -2,6 +2,7 @@
 
 import type { AnamClient } from "@anam-ai/js-sdk";
 import { useEffect, useRef, useState } from "react";
+import { EmailTranscriptForm, postEmail } from "./EmailTranscriptForm";
 import { MessageBubble } from "./MessageBubble";
 import type { AvatarOrientation, ChatMessage } from "./types";
 
@@ -25,6 +26,8 @@ export function AvatarPanel() {
   const [maxSeconds, setMaxSeconds] = useState(180);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [orientation, setOrientation] = useState<AvatarOrientation>("horizontal");
+  /** The ElevenLabs conversation behind the last call, so its transcript can be emailed. */
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   // Stop the stream (and the microphone) when the tab is left.
   useEffect(
@@ -50,11 +53,17 @@ export function AvatarPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orientation }),
       });
-      const body = (await response.json()) as { sessionToken?: string; maxSeconds?: number; error?: string };
+      const body = (await response.json()) as {
+        sessionToken?: string;
+        maxSeconds?: number;
+        conversationId?: string | null;
+        error?: string;
+      };
       if (!response.ok || !body.sessionToken) {
         throw new Error(body.error ?? START_ERROR);
       }
       setMaxSeconds(body.maxSeconds ?? 180);
+      setConversationId(body.conversationId ?? null);
 
       // The SDK needs the browser (WebRTC, microphone), so it is loaded only when a call starts.
       const { AnamEvent, ConnectionClosedCode, MessageRole, createClient } = await import("@anam-ai/js-sdk");
@@ -166,6 +175,13 @@ export function AvatarPanel() {
           >
             Start video call
           </button>
+          {conversationId && messages.length > 0 && (
+            <EmailTranscriptForm
+              key={conversationId}
+              label="Email me the last call"
+              onSend={(email) => postEmail("/api/transcript/email", { conversationId, email })}
+            />
+          )}
         </div>
       ) : (
         <>
