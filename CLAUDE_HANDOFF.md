@@ -25,8 +25,8 @@ for staff, and Aida rooms draft answers for staff on live calls.
 | **This web app** (chat, file upload, voice, video avatar, Aida calls, channel links) | ✅ Live | Next.js on Vercel: https://cda-demo.vercel.app (site password) — customers only |
 | **Admin page** `/admin` (Aida rooms, email switch, customers + Claude insights) | ✅ Live (21 Sep) | Same app, behind the Aida staff password — staff only |
 | Video avatar (Avatar tab) | ✅ Live | **Anam** avatar "Sofia" (the user's own Ellie picture) joined to the ElevenLabs agent |
-| Slack (bot "CDA_Support") | ⏳ In progress | Native ElevenLabs Slack integration, own Slack app (see §5) |
-| WhatsApp, phone number | ⏸ Parked | See CHANNEL_SETUP.md §14 |
+| Slack (bot "CDA_Support") | ⏳ In progress | Native ElevenLabs Slack integration, own Slack app (CHANNEL_SETUP.md §13) |
+| WhatsApp, phone number | ⏸ Parked | See CHANNEL_SETUP.md §13 |
 
 ---
 
@@ -107,11 +107,11 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
 - **`/admin`** (`src/app/admin/`, `src/components/admin/`, `src/app/api/admin/*`, `src/lib/adminData.ts`,
   `src/lib/anthropic.ts`): staff only, Aida staff password. Tabs Aida rooms (the old lobby) /
   Customers (list, channels, history, Claude Haiku insights per customer and for the week; nothing
-  stored) / Email (auto/draft switch). `/aida` redirects there. CHANNEL_SETUP.md §18
+  stored) / Email (auto/draft switch). `/aida` redirects there. CHANNEL_SETUP.md §9
 - `src/app/api/elevenlabs/*`: signed URL (chat) and conversation token (voice)
 - `src/app/api/anam/session/route.ts` + `src/components/AvatarPanel.tsx`: Anam avatar. The server gets an ElevenLabs signed URL and creates an Anam session token (`avatarModel: cara-4`, `maxSessionLengthSeconds`, `directorNotes` warm 0.5, `sessionOptions` 1152×768 or 768×1152, `environment.elevenLabsAgentSettings`). Anam Lab stores **no** ElevenLabs link; the "Olivia" persona in Lab is not used
 - `src/components/ChannelLinks.tsx`: Email (Gmail compose), Telegram and Instagram buttons (Instagram opens @new_digital_intelligence)
-- **Cross-channel customer memory** (CHANNEL_SETUP.md §16), live and tested against production:
+- **Cross-channel customer memory** (CHANNEL_SETUP.md §7), live and tested against production:
   - `src/app/api/agent/*`: the two agent tools and the post-call webhook. Exempt from the site
     password in `src/proxy.ts`, protected by a shared secret / HMAC instead (`src/lib/agentAuth.ts`)
   - `src/lib/customers.ts` + `supabase/schema.sql`: one customer, many channel rows, link codes, notes
@@ -119,13 +119,13 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
     accounts on Supabase Auth, and the panel where a channel is linked with a code
   - `src/lib/websiteSession.ts`: chat, voice and the avatar register their conversation server-side,
     because a website-only dynamic variable would break every other channel
-- **Aida rooms** (CHANNEL_SETUP.md §17): live calls between staff and a customer on LiveKit, each
+- **Aida rooms** (CHANNEL_SETUP.md §8): live calls between staff and a customer on LiveKit, each
   browser transcribing its own mic with Scribe, and the Aida agent drafting replies only staff see
   (approve → sent in the chat). `src/app/aida/`, `src/components/aida/`, `src/app/api/aida/*`,
   `src/lib/aida.ts`, `src/lib/livekit.ts`, `src/lib/aidaStaff.ts`. `/aida`, `/aida/join` and
   `/api/aida/*` are open past the site password; the separate Aida staff password is what makes
   someone staff, kept per browser tab
-- **Email channel** (CHANNEL_SETUP.md §5): Gmail API + Pub/Sub push (Google Cloud project
+- **Email channel** (CHANNEL_SETUP.md §4): Gmail API + Pub/Sub push (Google Cloud project
   `cda-email-509312`) → `src/app/api/email/gmail-push` → rules in `src/lib/emailParse.ts` skip robots →
   Ellie through her own Custom Channel trigger "CDA email" → `src/app/api/email/ellie-reply` sends
   the reply or leaves a Gmail draft, and labels the email Ellie/Replied, Draft ready, Skipped or
@@ -145,7 +145,7 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
 ## 5. Open tasks (in order)
 
 0. **Cross-channel customer memory** - **live** on Telegram, email and the website (chat, voice,
-   avatar). Details: CHANNEL_SETUP.md §16. Customers create an account on the site and link each
+   avatar). Details: CHANNEL_SETUP.md §7. Customers create an account on the site and link each
    channel by pasting a short code into it; Ellie never asks anyone to identify themselves.
    - **Never** bind a tool parameter to a channel-specific dynamic variable: it breaks every other
      channel, and a placeholder on `integration__telegram_chat_id` took Telegram down completely
@@ -178,7 +178,7 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
    Website chat/voice/avatar can also be emailed (`src/app/api/transcript/email`).
 1. **Slack** – waiting for the user:
    - The "New Digital Intelligence" Slack workspace hit the free plan's 10-app limit → use a new demo workspace or remove an unused app.
-   - User creates the **CDA_Support** app from the manifest in CHANNEL_SETUP.md §10, installs it, and gives the **Bot User OAuth Token** + **Signing Secret** and the mode (mention-only or all messages).
+   - User creates the **CDA_Support** app from the manifest in CHANNEL_SETUP.md §13, installs it, and gives the **Bot User OAuth Token** + **Signing Secret** and the mode (mention-only or all messages).
    - Then: ElevenLabs Integrations → Slack → "Bring your own bot" → Slack Event Subscriptions + Interactivity URLs → triggers Channel Message + Direct Message → test (user tests).
 2. **Confirm the Voice tab still works** after the input format change to PCM 16000 (the user confirmed the avatar, not voice yet).
 3. Optional: label Anam sessions in the session token (`clientLabel` / persona `name`, e.g. "Ellie – CDA website") so calls are easy to find in Anam Lab.
