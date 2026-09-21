@@ -656,6 +656,7 @@ Example prompts:
 | Anam API key | Vercel env vars, `.env.local` | Was shared in chat → rotate after the demo |
 | LiveAvatar API key + ElevenLabs key copy (old avatar) | LiveAvatar account | Not used any more → delete the LiveAvatar API key and secret |
 | Slack bot token + signing secret | ElevenLabs Slack connection | From the CDA_Support Slack app |
+| LiveKit API key + secret | Vercel env vars, `.env.local` | Aida rooms. Was shared in chat → rotate after the demo (cloud.livekit.io → project → Settings → Keys) |
 | Supabase service role key | Vercel env vars, `.env.local` | Was shared in chat → rotate after the demo |
 | `AGENT_TOOL_SECRET` | Vercel env vars, `.env.local`, ElevenLabs workspace secret | Generated randomly; must match in both places |
 | `ELEVENLABS_WEBHOOK_SECRET` | Vercel env vars, `.env.local` | Shown once when the post-call webhook is created |
@@ -671,7 +672,7 @@ Example prompts:
 | 17 Oct 2026 | ElevenLabs Creator credits reset |
 | **Before ~16 Nov 2026** | **Refresh the Instagram token** (link in section 8) and update the Make reply scenario header |
 | Monthly | Anam free plan gives 30 avatar minutes |
-| After the demo | Rotate the ElevenLabs API key (update Vercel), rotate the Anam API key, **rotate the Supabase service role key**, delete the Make API token and the old LiveAvatar key |
+| After the demo | Rotate the ElevenLabs API key (update Vercel), rotate the Anam API key, **rotate the Supabase service role key**, **rotate the LiveKit key**, delete the Make API token and the old LiveAvatar key |
 | When CDA content changes | Update the PDFs in Drive (auto sync) |
 
 ---

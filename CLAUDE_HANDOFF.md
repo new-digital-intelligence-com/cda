@@ -132,10 +132,11 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
    - Weak spot: Telegram and email identity rely on the undocumented `_tg_` / `_fd_` endings of the
      conversation id
 
-0b. **Aida rooms** – code written, builds, lints; the Aida agent is created. Not yet tested live.
-   Needs: the user runs `supabase/schema.sql` again (now safe to re-run), a LiveKit Cloud project
-   (URL + key + secret), and the four `LIVEKIT_*` / `AIDA_AGENT_ID` variables in `.env.local` and Vercel.
-   Then test the routes locally (free), and the user tests a real call (costs Scribe + Aida text).
+0b. **Aida rooms** – built, Aida agent created, tables created, LiveKit project connected
+   (`wss://test-o70a5e7x.livekit.cloud`). All 45 route checks pass locally: roles, forged tickets,
+   customers never seeing drafts, ending rooms. Still to do: the four `LIVEKIT_*` / `AIDA_AGENT_ID`
+   variables on Vercel, push, and a real call tested by the user (voice + transcript + drafts).
+   The Vercel MCP connector is on another account ("Medi" team) and cannot see `cda-demo`.
 1. **Slack** – waiting for the user:
    - The "New Digital Intelligence" Slack workspace hit the free plan's 10-app limit → use a new demo workspace or remove an unused app.
    - User creates the **CDA_Support** app from the manifest in CHANNEL_SETUP.md §10, installs it, and gives the **Bot User OAuth Token** + **Signing Secret** and the mode (mention-only or all messages).
@@ -153,4 +154,4 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
 | ~1 Oct 2026 | **Freshdesk trial ends** → email stops unless paid or moved to Make + Gmail |
 | ~17 Oct 2026 | ElevenLabs credits reset |
 | Before ~16 Nov 2026 | **Refresh the Instagram token** (60-day token) and update the Make reply scenario header |
-| After the demo | Rotate keys that were shared in chat (ElevenLabs, Anam, **Supabase service role**), delete the Make API token, delete the unused LiveAvatar API key/secret/voice agent |
+| After the demo | Rotate keys that were shared in chat (ElevenLabs, Anam, **Supabase service role**, **LiveKit**), delete the Make API token, delete the unused LiveAvatar API key/secret/voice agent |
