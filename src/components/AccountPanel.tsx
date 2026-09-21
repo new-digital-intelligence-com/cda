@@ -7,6 +7,7 @@ type LinkedChannel = { channel: string; channel_key: string; verified: boolean }
 const CHANNEL_LABELS: Record<string, string> = {
   telegram: "Telegram",
   instagram: "Instagram",
+  messenger: "Messenger",
   email: "Email",
   website: "This website",
   slack: "Slack",

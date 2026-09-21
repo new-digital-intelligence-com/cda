@@ -152,3 +152,20 @@ create table if not exists gmail_state (
 
 alter table email_messages enable row level security;
 alter table gmail_state    enable row level security;
+
+-- ---------------------------------------------------------------------------------------------
+-- Messenger: one row per person writing to the Facebook Page (src/lib/messenger.ts). Which Ellie
+-- conversation they are in (continued for 10 minutes) and the last answer sent, so a repeated
+-- delivery never sends twice. No message text.
+-- ---------------------------------------------------------------------------------------------
+
+create table if not exists messenger_threads (
+  psid            text primary key,              -- the person's Page-scoped id
+  conversation_id text,
+  last_reply      text,
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists messenger_threads_conversation_idx on messenger_threads (conversation_id);
+
+alter table messenger_threads enable row level security;

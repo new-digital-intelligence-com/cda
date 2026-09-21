@@ -11,7 +11,7 @@
 import { elevenLabsConversation } from "./elevenlabs";
 import { supabaseConfigured, supabaseRest as rest } from "./supabase";
 
-export const CHANNELS = ["telegram", "instagram", "email", "website", "slack"] as const;
+export const CHANNELS = ["telegram", "instagram", "messenger", "email", "website", "slack"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
 export type Customer = { id: string; name: string | null };
@@ -87,10 +87,27 @@ export async function resolveIdentity(body: Record<string, unknown>): Promise<Id
   const sender = await emailSender(conversationId);
   if (sender) return { channel: "email", key: sender.email, name: sender.name };
 
+  const messenger = await messengerSender(conversationId);
+  if (messenger) return { channel: "messenger", key: messenger };
+
   const instagram = await instagramSender(conversationId);
   if (instagram) return { channel: "instagram", key: instagram };
 
   return null;
+}
+
+/** A Messenger conversation: the web app notes who is in it (src/lib/messenger.ts). */
+async function messengerSender(conversationId: string): Promise<string | null> {
+  if (!conversationId) return null;
+  try {
+    const rows = await rest<{ psid: string }[]>(
+      `messenger_threads?conversation_id=eq.${q(conversationId)}&select=psid&limit=1`,
+    );
+    return rows[0]?.psid ?? null;
+  } catch (error) {
+    console.error("Messenger sender lookup failed", error);
+    return null;
+  }
 }
 
 /**

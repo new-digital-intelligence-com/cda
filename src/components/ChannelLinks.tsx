@@ -48,6 +48,18 @@ const channels: Channel[] = [
       </>
     ),
   },
+  {
+    name: "Messenger",
+    detail: "New Digital Intelligence",
+    href: "https://m.me/1450409441479124",
+    iconClassName: "bg-[#0866ff]",
+    icon: (
+      <>
+        <path d="M12 2C6.5 2 2 6.1 2 11.2c0 2.9 1.4 5.5 3.7 7.2V22l3.4-1.9c.9.3 1.9.4 2.9.4 5.5 0 10-4.1 10-9.2S17.5 2 12 2z" />
+        <polyline points="7 13 10 10 13 12.5 17 9" />
+      </>
+    ),
+  },
 ];
 
 export function ChannelLinks() {

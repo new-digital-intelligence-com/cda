@@ -48,7 +48,7 @@ type CustomerRow = { id: string; name: string | null; auth_user_id: string | nul
 function channelLabel(channel: string, key: string): string {
   if (channel === "website") return `browser ${key.slice(0, 6)}`;
   if (channel === "telegram") return `chat ${key}`;
-  if (channel === "instagram") return `id ${key}`;
+  if (channel === "instagram" || channel === "messenger") return `id ${key}`;
   return key;
 }
 

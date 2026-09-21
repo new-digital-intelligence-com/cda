@@ -21,6 +21,7 @@ for staff, and Aida rooms draft answers for staff on live calls.
 | Telegram @CDA_2026_Support_Bot | ✅ Live | Native ElevenLabs Telegram trigger |
 | Email cda_domestic_appliances@new-digital-intelligence.com | ✅ Live (21 Sep) | Gmail push → web app → Ellie's "CDA email" Custom Channel → sent, or a Gmail draft (`email_mode` on Aida). Freshdesk no longer used |
 | Instagram DMs @new_digital_intelligence | ✅ Live (new account + new Meta app, 21 Sep) | Make.com scenarios + ElevenLabs Custom Channel |
+| Facebook Messenger (Page "New Digital Intelligence") | ✅ Built 21 Sep | Meta webhook → web app (`src/lib/messenger.ts`) → Ellie's "CDA Messenger" Custom Channel. Not Make: its free plan allows 2 active scenarios, both used by Instagram |
 | Hosted web page / QR code | ✅ Live | ElevenLabs talk-to link (not password protected) |
 | **This web app** (chat, file upload, voice, video avatar, Aida calls, channel links) | ✅ Live | Next.js on Vercel: https://cda-demo.vercel.app (site password) — customers only |
 | **Admin page** `/admin` (Aida rooms, email switch, customers + Claude insights) | ✅ Live (21 Sep) | Same app, behind the Aida staff password — staff only |
@@ -69,6 +70,7 @@ Create `.env.local` (git-ignored). Copy the values from **Vercel → project `cd
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` | Gmail API access to the CDA mailbox (email channel, server only) |
 | `GMAIL_PUBSUB_TOPIC` / `GMAIL_PUSH_SECRET` / `CRON_SECRET` | Gmail push topic, the secret in the Pub/Sub push URL, and the daily cron's secret |
 | `EMAIL_CHANNEL_INBOUND_URL` / `EMAIL_CHANNEL_INBOUND_SECRET` / `EMAIL_CHANNEL_SIGNING_SECRET` | Ellie's "CDA email" Custom Channel trigger |
+| `MESSENGER_PAGE_TOKEN` / `MESSENGER_PAGE_ID` / `MESSENGER_WEBHOOK_SECRET` / `MESSENGER_CHANNEL_*` (3) | Messenger Page token (never expires), Page ID, Meta Callback URL secret, "CDA Messenger" Custom Channel |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude Haiku (`claude-haiku-4-5`) for the customer insights on `/admin` |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project for Aida rooms (server only) |
 | `AIDA_AGENT_ID` | The Aida copilot agent, `agent_2601m31rbrn8emrbfe8vgxgxdta9` |
