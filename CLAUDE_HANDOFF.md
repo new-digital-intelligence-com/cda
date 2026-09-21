@@ -148,9 +148,11 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
      (probably simply no such conversations; check once there are some)
 
 0a. **Email via Gmail push** – live from 21 Sep 2026, replacing Freshdesk. 33 local route checks
-   passed (secrets, signatures, draft in the right thread, no second draft on a repeated reply,
-   SKIP, labels, staff switch) without spending credits. Still to do: the user's own test email,
-   then **remove the Freshdesk trigger from Ellie** (Channels → Freshdesk) so nobody gets two answers.
+   passed without spending credits, and the user tested live: auto mode replies in the thread,
+   draft mode leaves a Gmail draft. Two bugs found live and fixed (reply text is at
+   `data[].event.agent_response`; Ellie copied the email header into her reply). No new agent:
+   Ellie answers, Aida only stores `email_mode`. Still to do: **remove the Freshdesk trigger from
+   Ellie** (Channels → Freshdesk) so nobody gets two answers.
 
 0b. **Aida rooms** – built, Aida agent created, tables created, LiveKit project connected
    (`wss://test-o70a5e7x.livekit.cloud`). All 45 route checks pass locally: roles, forged tickets,

@@ -123,9 +123,10 @@ The prompt is edited in **Agent → System prompt**. Sections:
   - **Telegram only**: text only, cannot see photos or voice notes
   - **Instagram only**: plain text, no markdown, under 900 characters
   - **Website chat**: can read attached images and PDFs
-  - **Email only**: messages starting `[Email to CDA customer care]`; plain-text email body signed
-    "Ellie, CDA virtual assistant", never asks for the email address, cannot open attachments, answers
-    exactly `SKIP` to anything not written by a person who wants help (section 5)
+  - **Email only**: messages starting `[Email to CDA customer care]`; writes only the body of the
+    reply (no copied header), plain text, signed "Ellie, CDA virtual assistant", never asks for the
+    email address, cannot open attachments, answers exactly `SKIP` to anything not written by a
+    person who wants help (section 5)
 - **Goal**: products, warranty and registration, repairs, spare parts and manuals, where to buy
 - **Knowledge rules**: only facts from the knowledge base; check model numbers; discontinued products;
   - conflicting sources: give both statements briefly (never mention "older FAQs" or internal documents)
@@ -270,6 +271,10 @@ Since 21 September 2026 email no longer goes through Freshdesk. The web app read
 through the Gmail API, hands each email to Ellie through a Custom Channel trigger of its own, and
 **sends her reply or leaves it as a Gmail draft**, depending on a switch staff control.
 
+**No new agent.** Ellie answers every email, with the same prompt and knowledge as every other
+channel. The only thing added to her is a second Custom Channel trigger ("CDA email"). The
+existing **Aida** agent (section 17) merely stores the auto/draft switch; she never sees an email.
+
 | Item | Value |
 |---|---|
 | Customer email address | **cda_domestic_appliances@new-digital-intelligence.com** (Google Workspace mailbox) |
@@ -293,6 +298,21 @@ Ellie's answer → /api/email/ellie-reply → reads email_mode on Aida
 A reply normally arrives within a few seconds. Every email is its own ElevenLabs conversation: a
 Custom Channel conversation ends after one turn. The customer's earlier messages are quoted in
 their email, and the customer memory (section 16) carries the rest.
+
+What Ellie receives (at most 6,000 characters of text, attachments named but not opened):
+
+```
+[Email to CDA customer care]
+From: Jane Doe <jane@example.com>
+Subject: Oven shows F3
+
+<the email text>
+```
+
+Her prompt tells her to write **only the body** of the reply. If she still starts it with those
+header lines, the web app removes them before sending (`plainReply` in `src/lib/emailParse.ts`),
+along with any markdown. The reply goes out as `"CDA Customer Care (demo)" <cda_domestic_appliances@…>`,
+with `Re:` on the subject and In-Reply-To / References, so it lands in the customer's thread.
 
 ### Which emails get a reply
 
@@ -365,6 +385,20 @@ repeated notification from answering twice. `gmail_state` holds how far the inbo
    `/api/email/ellie-reply` → copy the Inbound URL, Inbound Secret and Outbound Signing Secret
 6. Run `supabase/schema.sql`; set the email variables (section 7) in `.env.local` and on Vercel
 7. Start the watch once: `GET /api/email/gmail-watch` with `Authorization: Bearer <GMAIL_PUSH_SECRET>`
+
+### Verified by test (21 September 2026)
+
+- **Local, no credits spent** (33 checks, Ellie's reply faked with a correctly signed webhook in
+  the documented format): every route refuses a missing or wrong secret or signature; the site is
+  still locked; the switch reads and writes Aida; the watch starts and renews; a reply becomes
+  exactly one draft in the right thread with the right headers and UTF-8 text; the same reply
+  delivered twice makes no second draft; `SKIP` → Skipped; labels are created and swapped
+- **Live**: an email in **auto** mode got Ellie's reply in the same thread, labelled Ellie/Replied;
+  an email in **draft** mode got no reply, and the draft waited in the thread (Ellie/Draft ready)
+  until staff pressed Send
+- Two problems found by the live test and fixed the same day: the reply text is at
+  `data[].event.agent_response` (it was read one level too high, so the first answer was never
+  sent), and Ellie copied the `[Email to CDA customer care]` / From / Subject header into her reply
 
 ### Notes
 
@@ -841,6 +875,8 @@ enough for a demo but not for real traffic.
 | Email labelled **Ellie/Failed** | Ellie or Gmail could not be reached; the reason is on the staff card on `/aida`. Answer it by hand. "Google sign-in failed: invalid_grant" in the logs → run the Gmail consent again |
 | A customer's email labelled **Ellie/Skipped** | A rule or Ellie took it for a robot; the reason is on the staff card. Answer it by hand, and adjust the rules in `src/lib/emailParse.ts` if it keeps happening |
 | A customer gets two answers to one email | The old Freshdesk trigger is still on Ellie → remove it |
+| Ellie's email reply starts with `[Email to CDA customer care]`, `From:`, `Subject:` | She copied the header she was given. Her prompt asks for the body only and the web app strips those lines (fixed 21 Sep) |
+| `email_mode` is not in the Aida dashboard's **Vars** panel | Expected: the panel only lists variables used as `{{…}}` in the agent. It exists (check through the API); change it on `/aida` or through Claude |
 | Ellie's email answer is in ElevenLabs but never sent; the email stays "Ellie is writing…" | The reply webhook's text is at `data[].event.agent_response`, not `data[].agent_response` (the first live test on 21 Sep hit exactly this; fixed). ElevenLabs shows `delivery_status: success` because the route answered 200 |
 | Voice widget test error "draft_from_user_id" | Use the **Inline** test mode or refresh the page |
 | Avatar call fails to start | The real reason is in the browser console (F12 → Console) and the Vercel function logs. Check the `ANAM_*` variables, that the agent's input format is PCM 16000 Hz, and the Anam plan's call length (old LiveAvatar lesson: `max_session_duration (180s) exceeds the maximum allowed (120s)`) |
@@ -1070,6 +1106,7 @@ does not spend transcription minutes.
 | Prompt | Her own copilot rules, plus Ellie's "Company context", "Knowledge rules", "Safety" and "Handover to a human" sections |
 | Mode | Text only, no first message, session limit 1 hour (the host reconnects her automatically) |
 | Tools / webhook / channels | **None** |
+| Dynamic variables | Only the placeholder `email_mode` (`auto` / `draft`): the switch for Ellie's email replies (section 5). Nothing in Aida's prompt uses it, so the dashboard's **Vars** panel does not list it; read or change it through the API, the staff card on `/aida` or Claude |
 
 She was **created fresh**, not with ElevenLabs' "duplicate agent": a duplicate could carry Ellie's
 Telegram or email triggers, and two agents on one channel is how Telegram broke before. Ellie was
