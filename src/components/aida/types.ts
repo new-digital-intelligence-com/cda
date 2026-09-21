@@ -33,14 +33,18 @@ export type Suggestion = {
 
 export type Person = { identity: string; name: string; role: AidaRole; speaking: boolean; isMe: boolean };
 
-/** Joining and creating rooms share one response shape. */
+/**
+ * Joining and creating rooms share one response shape. Sending the staff token is what makes the
+ * server treat this person as CDA staff; without it they are a customer.
+ */
 export async function requestRoom(
   path: "/api/aida/rooms" | "/api/aida/join",
   body: Record<string, string>,
+  staffToken?: string | null,
 ): Promise<JoinedRoom> {
   const response = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(staffToken ? { "x-aida-staff": staffToken } : {}) },
     body: JSON.stringify(body),
   });
   const result = (await response.json().catch(() => ({}))) as Partial<JoinedRoom> & { error?: string };
@@ -48,6 +52,29 @@ export async function requestRoom(
     throw new Error(result.error ?? "Something went wrong. Please try again.");
   }
   return { room: result.room, ticket: result.ticket };
+}
+
+// The staff token lives in sessionStorage, which belongs to one tab: a new tab (for example the
+// invite link opened next to the lobby) starts without it and is therefore a customer.
+const STAFF_KEY = "aida-staff";
+
+export function savedStaffToken(): string | null {
+  try {
+    const token = sessionStorage.getItem(STAFF_KEY);
+    const expiresAt = Number(token?.split(".")[0]);
+    return token && Number.isFinite(expiresAt) && expiresAt > Date.now() ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberStaffToken(token: string | null) {
+  try {
+    if (token) sessionStorage.setItem(STAFF_KEY, token);
+    else sessionStorage.removeItem(STAFF_KEY);
+  } catch {
+    // Storage unavailable: the tab simply has to sign in again after a reload.
+  }
 }
 
 const NAME_KEY = "aida-name";

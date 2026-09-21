@@ -7,7 +7,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-// The employee side of Aida. Behind the site password like the rest of the site (see src/proxy.ts).
+// The entry to Aida. Open past the site password (see src/proxy.ts): CDA staff sign in here with the
+// separate Aida staff password, and customers are sent on to the join page.
 export default function AidaPage() {
   return (
     <>
@@ -16,7 +17,7 @@ export default function AidaPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
             <span className="rounded-md bg-cda-red px-2.5 py-1 text-xl font-extrabold tracking-wider">CDA</span>
-            <span className="text-lg font-semibold">Aida · staff</span>
+            <span className="text-lg font-semibold">Aida</span>
           </div>
           <Link href="/" className="text-sm text-white/80 hover:text-white">
             ← Customer assistant

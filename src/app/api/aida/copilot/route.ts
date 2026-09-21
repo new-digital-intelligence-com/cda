@@ -1,15 +1,12 @@
 import { findRoomByLivekitName } from "@/lib/aida";
 import { elevenLabsGet } from "@/lib/elevenlabs";
 import { ticketFromRequest } from "@/lib/livekit";
-import { hasValidSession } from "@/lib/session";
 
 // Opens a text-only session with Aida, the copilot agent, for the employee who hosts the room.
-// Both checks matter: an employee ticket for this room, and the site password in the same browser.
+// An employee ticket is enough: our server only ever issues one after the Aida staff password.
 export async function POST(request: Request) {
   const ticket = await ticketFromRequest(request);
-  if (!ticket || ticket.role !== "employee" || !(await hasValidSession())) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!ticket || ticket.role !== "employee") return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const agentId = process.env.AIDA_AGENT_ID;
   if (!agentId) return Response.json({ error: "Aida is not configured" }, { status: 503 });

@@ -1,15 +1,15 @@
 import { cleanText, createRoom, displayCode, listOpenRooms, livekitRoomName } from "@/lib/aida";
+import { isStaffRequest } from "@/lib/aidaStaff";
 import { livekitConfigured, roomTicket } from "@/lib/livekit";
-import { hasValidSession } from "@/lib/session";
 import { supabaseConfigured } from "@/lib/supabase";
 
 // Aida rooms. This route is outside the site password lock (see src/proxy.ts) because customers
-// create rooms too. Who you are is decided here and nowhere else: holding the site password makes
-// you a CDA employee, anything else makes you a customer. The name you type is only a label.
+// create rooms too. Who you are is decided here and nowhere else: a valid Aida staff token makes
+// you CDA staff, anything else makes you a customer. The name you type is only a label.
 
-/** The employee lobby: every open room. */
-export async function GET() {
-  if (!(await hasValidSession())) return Response.json({ error: "Unauthorized" }, { status: 401 });
+/** The staff lobby: every open room. */
+export async function GET(request: Request) {
+  if (!(await isStaffRequest(request))) return Response.json({ error: "Unauthorized" }, { status: 401 });
   if (!supabaseConfigured()) return Response.json({ error: "Rooms are not configured" }, { status: 503 });
 
   const rooms = await listOpenRooms();
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   const name = cleanText(body.name, 40);
   if (!name) return Response.json({ error: "Please enter your name" }, { status: 400 });
 
-  const role = (await hasValidSession()) ? "employee" : "customer";
+  const role = (await isStaffRequest(request)) ? "employee" : "customer";
   const title = cleanText(body.title, 60) || (role === "customer" ? `Help for ${name}` : null);
 
   try {

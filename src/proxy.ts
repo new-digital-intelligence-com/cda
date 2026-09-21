@@ -13,11 +13,12 @@ export async function proxy(request: NextRequest) {
   // — see src/lib/agentAuth.ts — and each route rejects anything unsigned.
   if (pathname.startsWith("/api/agent/")) return NextResponse.next();
 
-  // Aida: customers join rooms without the site password, using a room code. The join page and
-  // the Aida routes are therefore open, and every route decides for itself: the site password
-  // cookie makes you an employee, a signed room ticket proves you are in the room. The employee
-  // lobby at /aida stays behind the lock like the rest of the site.
-  if (pathname === "/aida/join" || pathname.startsWith("/api/aida/")) return NextResponse.next();
+  // Aida has its own staff password, separate from this one. Its pages and routes are open here and
+  // every route decides for itself: the Aida staff token makes you an employee, a signed room ticket
+  // proves you are in the room, and anyone else is a customer.
+  if (pathname === "/aida" || pathname === "/aida/join" || pathname.startsWith("/api/aida/")) {
+    return NextResponse.next();
+  }
 
   const isApi = pathname.startsWith("/api/");
   if (!sitePasswordConfigured()) {

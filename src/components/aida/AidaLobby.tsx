@@ -1,8 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AidaRoom } from "./AidaRoom";
-import { rememberName, requestRoom, savedName, type JoinedRoom } from "./types";
+import {
+  rememberName,
+  rememberStaffToken,
+  requestRoom,
+  savedName,
+  savedStaffToken,
+  type JoinedRoom,
+} from "./types";
 
 type OpenRoom = {
   code: string;
@@ -14,8 +22,108 @@ type OpenRoom = {
 
 const REFRESH_MS = 10_000;
 
-/** The employee side: open a room, see every open room (including customers waiting), or join by code. */
+/**
+ * The staff side of Aida. The Aida staff password is asked for first, and only in this tab: open
+ * an invite link in a new tab and you are a customer there, which is how to test both sides.
+ */
 export function AidaLobby() {
+  const [staffToken, setStaffToken] = useState<string | null>(null);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setStaffToken(savedStaffToken());
+      setChecked(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const signOut = useCallback(() => {
+    rememberStaffToken(null);
+    setStaffToken(null);
+  }, []);
+
+  if (!checked) return null;
+  if (!staffToken) {
+    return (
+      <StaffSignIn
+        onSignedIn={(token) => {
+          rememberStaffToken(token);
+          setStaffToken(token);
+        }}
+      />
+    );
+  }
+  return <Lobby staffToken={staffToken} onSignOut={signOut} />;
+}
+
+function StaffSignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    const response = await fetch("/api/aida/staff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    const body = (await response.json().catch(() => ({}))) as { token?: string; error?: string };
+    setBusy(false);
+    if (!response.ok || !body.token) {
+      setError(body.error ?? "Could not sign in");
+      return;
+    }
+    onSignedIn(body.token);
+  }
+
+  return (
+    <div className="mx-auto grid w-full max-w-3xl gap-4 md:grid-cols-2">
+      <form onSubmit={submit} className="space-y-3 rounded-xl bg-white p-6 shadow-sm">
+        <h1 className="text-xl font-bold text-cda-dark">CDA staff</h1>
+        <p className="text-sm text-cda-text">
+          Enter the Aida staff password. In the room you will see Aida&apos;s suggested answers and decide
+          what is sent to the customer.
+        </p>
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="Aida staff password"
+          autoComplete="current-password"
+          autoFocus
+          className="w-full rounded-lg border border-cda-grey px-3 py-2 text-sm"
+        />
+        {error && <p className="text-sm text-cda-red">{error}</p>}
+        <button
+          type="submit"
+          disabled={busy || !password}
+          className="w-full rounded-lg bg-cda-red px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          Sign in as staff
+        </button>
+      </form>
+
+      <div className="space-y-3 rounded-xl bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-bold text-cda-dark">Customer</h2>
+        <p className="text-sm text-cda-text">
+          No password needed. Join a call with a room code, or open a room and the CDA team will join you.
+        </p>
+        <Link
+          href="/aida/join"
+          className="block w-full rounded-lg border border-cda-red px-3 py-2 text-center text-sm font-semibold text-cda-red"
+        >
+          Continue as a customer
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function Lobby({ staffToken, onSignOut }: { staffToken: string; onSignOut: () => void }) {
   const [joined, setJoined] = useState<JoinedRoom | null>(null);
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -25,10 +133,15 @@ export function AidaLobby() {
   const [busy, setBusy] = useState(false);
 
   const loadRooms = useCallback(async () => {
-    const response = await fetch("/api/aida/rooms");
+    const response = await fetch("/api/aida/rooms", { headers: { "x-aida-staff": staffToken } });
+    // The password was changed or the sign-in expired: back to the password screen.
+    if (response.status === 401) {
+      onSignOut();
+      return [];
+    }
     if (!response.ok) return [];
     return ((await response.json()) as { rooms: OpenRoom[] }).rooms;
-  }, []);
+  }, [staffToken, onSignOut]);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +171,7 @@ export function AidaLobby() {
     setError(null);
     try {
       rememberName(cleanName);
-      setJoined(await requestRoom(path, { ...body, name: cleanName }));
+      setJoined(await requestRoom(path, { ...body, name: cleanName }, staffToken));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -84,12 +197,17 @@ export function AidaLobby() {
   return (
     <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
       <section className="space-y-4 rounded-xl bg-white p-5 shadow-sm">
-        <div>
-          <h1 className="text-xl font-bold text-cda-dark">Aida rooms</h1>
-          <p className="mt-1 text-sm text-cda-text">
-            Live calls with a customer. Aida listens and drafts answers that only CDA staff see; you approve
-            what gets sent.
-          </p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h1 className="text-xl font-bold text-cda-dark">Aida rooms</h1>
+            <p className="mt-1 text-sm text-cda-text">
+              Live calls with a customer. Aida listens and drafts answers that only CDA staff see; you approve
+              what gets sent.
+            </p>
+          </div>
+          <button type="button" onClick={onSignOut} className="shrink-0 text-xs text-cda-text underline">
+            Sign out
+          </button>
         </div>
 
         <label className="block text-sm font-semibold text-cda-dark">
@@ -173,8 +291,8 @@ export function AidaLobby() {
           onJoin={(roomCode) => void enter("/api/aida/join", { code: roomCode })}
         />
         <p className="text-xs text-cda-text">
-          To test as a customer on this computer, open the invite link in a private window. This browser has the
-          site password, so it always joins as CDA staff.
+          To test as a customer, open the room&apos;s invite link in a new tab. Staff sign-in only applies to
+          this tab, so the new tab joins as the customer.
         </p>
       </section>
     </div>

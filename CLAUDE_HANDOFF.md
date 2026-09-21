@@ -66,6 +66,7 @@ Create `.env.local` (git-ignored). Copy the values from **Vercel → project `cd
 | `FRESHDESK_API_KEY` / `FRESHDESK_SUBDOMAIN` | Used to find who wrote an email ticket |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project for Aida rooms (server only) |
 | `AIDA_AGENT_ID` | The Aida copilot agent, `agent_2601m31rbrn8emrbfe8vgxgxdta9` |
+| `AIDA_STAFF_PASSWORD` | Aida's own staff password; the site password does **not** make anyone staff |
 
 ```bash
 npm run dev      # http://localhost:3000
@@ -109,8 +110,9 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
 - **Aida rooms** (CHANNEL_SETUP.md §17): live calls between staff and a customer on LiveKit, each
   browser transcribing its own mic with Scribe, and the Aida agent drafting replies only staff see
   (approve → sent in the chat). `src/app/aida/`, `src/components/aida/`, `src/app/api/aida/*`,
-  `src/lib/aida.ts`, `src/lib/livekit.ts`. The customer page `/aida/join` and `/api/aida/*` are open
-  past the site password; the site password is what makes someone staff
+  `src/lib/aida.ts`, `src/lib/livekit.ts`, `src/lib/aidaStaff.ts`. `/aida`, `/aida/join` and
+  `/api/aida/*` are open past the site password; the separate Aida staff password is what makes
+  someone staff, kept per browser tab
 - Vercel deploys `main` automatically; after changing env vars on Vercel, redeploy
 
 **Anam** (free plan: 30 min/month, 3-min calls, 1 custom avatar) – avatar Sofia, Cara 4, supports horizontal and vertical.
@@ -137,6 +139,7 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
    customers never seeing drafts, ending rooms. Still to do: the four `LIVEKIT_*` / `AIDA_AGENT_ID`
    variables on Vercel, push, and a real call tested by the user (voice + transcript + drafts).
    The Vercel MCP connector is on another account ("Medi" team) and cannot see `cda-demo`.
+   Staff are decided by the separate Aida password (`AIDA_STAFF_PASSWORD`), kept per browser tab.
 1. **Slack** – waiting for the user:
    - The "New Digital Intelligence" Slack workspace hit the free plan's 10-app limit → use a new demo workspace or remove an unused app.
    - User creates the **CDA_Support** app from the manifest in CHANNEL_SETUP.md §10, installs it, and gives the **Bot User OAuth Token** + **Signing Secret** and the mode (mention-only or all messages).

@@ -375,6 +375,7 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `LIVEKIT_URL` | LiveKit Cloud project URL, `wss://….livekit.cloud` (Aida rooms, section 17) |
 | `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project key and secret — server only |
 | `AIDA_AGENT_ID` | `agent_2601m31rbrn8emrbfe8vgxgxdta9`, the Aida copilot agent |
+| `AIDA_STAFF_PASSWORD` | Password that makes someone CDA staff in Aida rooms (separate from `SITE_PASSWORD`) |
 
 After changing a variable on Vercel → **Redeploy**.
 
@@ -909,15 +910,21 @@ The role comes from **how you got in**, never from what you type. The name is on
 
 | | Gets in with | Sees |
 |---|---|---|
-| **CDA employee** | The site password → `/aida` (the lobby: create, list, join) | Everything, including Aida's drafts and Approve / Edit / Decline |
-| **Customer** | A room code or invite link → `/aida/join` (public, no site password) | Talk, chat and the transcript. **Never** the drafts |
+| **CDA employee** | The **Aida staff password** (`AIDA_STAFF_PASSWORD`) on `/aida` → the lobby: create, list, join | Everything, including Aida's drafts and Approve / Edit / Decline |
+| **Customer** | A room code or invite link → `/aida/join`, no password at all | Talk, chat and the transcript. **Never** the drafts |
+
+Aida has **its own password**, separate from the site password: knowing the site password does
+**not** make anyone staff. `/aida` and `/aida/join` are open past the site lock.
+
+The staff sign-in is a signed token kept **per browser tab** (sessionStorage) and sent in the
+`x-aida-staff` header, not a cookie. Changing `AIDA_STAFF_PASSWORD` signs every staff tab out.
 
 The server writes the role into the LiveKit ticket. LiveKit does not let a participant change its
 own attributes, so every browser can trust `participant.attributes.role`. A customer's browser
 never receives drafts, and "CDA Support" messages are only accepted from employee participants.
 
-> Testing alone: open the customer side in a **private window**. A browser holding the site password
-> always joins as staff.
+> Testing alone: sign in as staff in one tab, then open the room's invite link in a **new tab** of
+> the same browser. The new tab has no staff sign-in, so it joins as the customer.
 
 ### How it works
 
@@ -965,13 +972,17 @@ All under `/api/aida/`, open past the site password and each checking for itself
 
 | Route | Who | What |
 |---|---|---|
-| `GET /api/aida/rooms` | employee (site password) | open rooms for the lobby |
-| `POST /api/aida/rooms` | anyone | create a room and get a ticket; the site password makes you staff |
-| `POST /api/aida/join` | anyone | join with a code |
+| `POST /api/aida/staff` | anyone | the Aida staff password → a staff token for this tab |
+| `GET /api/aida/rooms` | staff token | open rooms for the lobby |
+| `POST /api/aida/rooms` | anyone | create a room and get a ticket; a staff token makes you staff |
+| `POST /api/aida/join` | anyone | join with a code; a staff token makes you staff |
 | `GET/POST /api/aida/events` | room ticket | the record; customers cannot post drafts or decisions, and never get drafts back |
 | `POST /api/aida/scribe-token` | room ticket | a one-use Scribe token, only for an open room |
-| `POST /api/aida/copilot` | employee ticket **and** site password | a text session with Aida |
-| `POST /api/aida/close` | employee ticket **and** site password | end the room for everyone |
+| `POST /api/aida/copilot` | employee ticket | a text session with Aida |
+| `POST /api/aida/close` | employee ticket | end the room for everyone |
+
+An employee ticket is only ever issued to someone who sent a valid staff token, so it is enough on
+its own for the last two.
 
 Rooms expire after **4 hours**. Codes are 6 characters without I, O, 0 or 1, shown as `4F2-K9M`.
 
@@ -989,7 +1000,7 @@ People talking to people through LiveKit uses **no** ElevenLabs voice credits.
 
 1. Run `supabase/schema.sql` again (it is now safe to re-run: it never drops or changes data)
 2. LiveKit Cloud → new project → copy the URL, API key and API secret
-3. Add `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and `AIDA_AGENT_ID` to `.env.local`
-   **and** Vercel → Redeploy
-4. Test: employee opens `/aida` → Create room → Copy invite link → open it in a private window as the
+3. Add `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `AIDA_AGENT_ID` and
+   `AIDA_STAFF_PASSWORD` to `.env.local` **and** Vercel → Redeploy
+4. Test: `/aida` → staff password → Create room → Copy invite link → open it in a **new tab** as the
    customer. Headphones on both sides give the cleanest transcript.
