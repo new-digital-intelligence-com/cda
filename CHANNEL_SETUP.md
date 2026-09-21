@@ -530,10 +530,10 @@ ElevenLabs has **no native Instagram channel**, so Make.com passes messages in b
 
 | Item | Value |
 |---|---|
-| Instagram account | **@samrasellimi** (Business account), IG user ID `17841437047562810` |
-| Meta app | **cda demo** (Meta App ID `1869137394246515`), **Published** |
+| Instagram account | **@new_digital_intelligence** (Business account), IG user ID `17841430407573788` — since 21 Sep 2026 |
+| Meta app | A **new** Meta developer app (created 21 Sep 2026), **Published** |
 | Meta use case | Manage messaging & content on Instagram → **API setup with Instagram login** |
-| Instagram app ID | `1101309845810502` |
+| Previous account and app | @samrasellimi (`17841437047562810`), app "cda demo" (`1869137394246515`, Instagram app `1101309845810502`) — Meta blocked its API access; no longer used |
 | Permissions | `instagram_business_basic`, `instagram_business_manage_messages` (Standard Access, no App Review) |
 | Webhook field | `messages` (subscribed) |
 | Privacy policy | Public Google Doc (required to publish) |
@@ -570,11 +570,14 @@ Webhooks (instagram-in)
   {
     "data": { "type": "user_message", "text": "<escaped DM text>", "user_identifier": "<sender id>" },
     "user_message_id": "<sender id>|<message id>",
-    "conversation_id": "<only when continuing>"
+    "conversation_id": "<only when continuing>",
+    "dynamic_variables": { "instagram_id": "<sender id>" }
   }
   ```
 - Text is encoded with `escapeJSON()` so quotes and line breaks don't break the request
 - The sender ID is put inside `user_message_id` so the reply scenario knows who to answer
+- `instagram_id` is stored on the ElevenLabs conversation; the web app reads it from there to
+  recognise the person (section 16). It is **not** bound to any tool parameter
 - **Data store** `ig_conversations` (data structure `ig_conversation`: `conversation_id`, `updated_at`) remembers each customer's conversation for 10 minutes
 
 ### Make scenario 2: `IG – Ellie reply out` (webhook `ellie-reply`)
@@ -583,7 +586,7 @@ Webhooks (instagram-in)
 Webhooks (ellie-reply)  ← Custom Channel "Reply Webhook URL"
   └─ Iterator over data[]
        └─ filter: type = agent_response
-            └─ HTTP POST https://graph.instagram.com/v25.0/17841437047562810/messages
+            └─ HTTP POST https://graph.instagram.com/v25.0/17841430407573788/messages
                  header Authorization: Bearer <Instagram token>
                  body: {"recipient":{"id":"<sender id from user_message_ids>"},
                         "message":{"text":"<escaped reply, max 1,000 chars>"}}
@@ -605,6 +608,22 @@ Webhooks (ellie-reply)  ← Custom Channel "Reply Webhook URL"
 9. Subscribe the account to `messages` (dashboard, or `POST https://graph.instagram.com/v25.0/me/subscribed_apps?subscribed_fields=messages&access_token=<TOKEN>`)
 10. Build both Make scenarios (done through the Make API, tested with a public echo service before switching to real endpoints)
 11. **App settings → Basic** → Privacy Policy URL → **Publish** the app (webhooks are only delivered when published)
+
+### Switching to another Instagram account or Meta app (done 21 Sep 2026)
+
+Nothing changes in ElevenLabs, and the Make webhooks keep their URLs. Only these do:
+
+1. New app: **API setup with Instagram login** → Add account → **Generate token** (steps 1–4 above)
+2. `GET https://graph.instagram.com/v25.0/me?fields=user_id,username&access_token=<TOKEN>` → the
+   new IG user ID (`user_id`)
+3. **Make**: in "IG – Instagram in" replace the old IG user ID in the "Instagram DM" filter; in "IG –
+   Ellie reply out" replace it in the URL and put the new token in the Authorization header
+   (done through the Make API; the old blueprints were backed up first)
+4. Subscribe the account to `messages` (step 9)
+5. New app → **Configure webhooks**: Callback URL = the `instagram-in` webhook URL (Make → Webhooks),
+   Verify token = the one in the "Meta verification" filter → Verify and save → subscribe **messages**
+6. Privacy Policy URL → **Publish** (step 11)
+7. Website: the Instagram button in `src/components/ChannelLinks.tsx`
 
 ### Notes
 
@@ -787,7 +806,7 @@ Example prompts:
 | Email Custom Channel secrets (inbound + signing) | ElevenLabs "CDA email" trigger, Vercel env vars, `.env.local` | Shared in chat → regenerate after the demo |
 | Google Drive access | ElevenLabs Google Drive integration | Read-only, picked files only |
 | Custom Channel secrets (input/output) | ElevenLabs trigger; input secret in Make HTTP header | |
-| Instagram access token | Make scenario "IG – Ellie reply out" (Authorization header) | **Expires every 60 days** |
+| Instagram access token | Make scenario "IG – Ellie reply out" (Authorization header); a copy in `.env.local` (`INSTAGRAM_ACCESS_TOKEN`, not used by the web app) for API checks | **Expires every 60 days** (current one ~20 Nov 2026). Shared in chat |
 | Instagram app secret | Meta developer dashboard | Not used in Make |
 | Webhook verify token | Make filter "Meta verification" + Meta webhook settings | |
 | `SITE_PASSWORD` | Vercel env vars, `.env.local` | |
@@ -810,7 +829,7 @@ Example prompts:
 | Daily, automatic | Vercel Cron renews the Gmail watch (it lapses after 7 days without renewal) |
 | Early/mid Oct 2026 | Make free operations reset (1,000/month) |
 | 17 Oct 2026 | ElevenLabs Creator credits reset |
-| **Before ~16 Nov 2026** | **Refresh the Instagram token** (link in section 8) and update the Make reply scenario header |
+| **Before ~20 Nov 2026** | **Refresh the Instagram token** (generated 21 Sep 2026, valid 60 days; link in section 8) and update the Make reply scenario header. Meta has no longer token; each refresh gives 60 more days |
 | Monthly | Anam free plan gives 30 avatar minutes |
 | After the demo | Rotate the ElevenLabs API key (update Vercel), rotate the Anam API key, **rotate the Supabase service role key**, **rotate the LiveKit key**, **reset the Google OAuth client secret** (then run the Gmail consent again), regenerate the email Custom Channel secrets, delete the Make API token and the old LiveAvatar key |
 | When CDA content changes | Update the PDFs in Drive (auto sync) |
@@ -955,7 +974,7 @@ on every channel. This matters, see the warning below.
 | Telegram | The chat id is inside the conversation id: `conv_85_..._tg_6486763839` |
 | Email | The web app knows the sender of every email it hands to Ellie. It ties the conversation to that address as soon as ElevenLabs names it, and `customer_lookup` waits up to a second for that to land (section 5). Old Freshdesk conversations: the ticket number in the conversation id (`..._fd_9`) |
 | Website chat / voice / avatar | The server registers the conversation against the signed-in account, or the `cda_visitor` cookie, when the session is created |
-| Instagram | Make sends `dynamic_variables: {"instagram_id": ...}`, but the channel is blocked by Meta |
+| Instagram | Make sends `dynamic_variables: {"instagram_id": ...}` with each message. ElevenLabs stores it on the conversation, and the web app reads it from there (`GET /v1/convai/conversations/{id}`, only for Custom Channel conversations). Never bound to a tool. Linking with a code works since 21 Sep 2026 |
 | Slack | `integration__slack_user_id` exists, but is not wired up yet |
 
 > **Never bind a tool parameter to a channel-specific dynamic variable.** Doing so makes the

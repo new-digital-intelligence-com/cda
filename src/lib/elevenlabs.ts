@@ -29,7 +29,14 @@ export async function realtimeScribeToken(): Promise<string> {
 export type ConversationRecord = {
   status: "initiated" | "in-progress" | "processing" | "done" | "failed";
   transcript?: { role: "user" | "agent"; message: string | null }[];
-  metadata?: { start_time_unix_secs?: number; text_only?: boolean };
+  metadata?: {
+    start_time_unix_secs?: number;
+    text_only?: boolean;
+    /** Set for conversations started by a channel trigger, e.g. external_system "custom_channel". */
+    async_metadata?: { external_system?: string | null; external_id?: string | null } | null;
+  };
+  /** What the channel passed in when the conversation started, e.g. Make's instagram_id. */
+  conversation_initiation_client_data?: { dynamic_variables?: Record<string, unknown> | null } | null;
 };
 
 /** One conversation with its transcript, as ElevenLabs stored it. Free to read. */

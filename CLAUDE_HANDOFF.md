@@ -20,7 +20,7 @@ for staff, and Aida rooms draft answers for staff on live calls.
 |---|---|---|
 | Telegram @CDA_2026_Support_Bot | ✅ Live | Native ElevenLabs Telegram trigger |
 | Email cda_domestic_appliances@new-digital-intelligence.com | ✅ Live (21 Sep) | Gmail push → web app → Ellie's "CDA email" Custom Channel → sent, or a Gmail draft (`email_mode` on Aida). Freshdesk no longer used |
-| Instagram DMs | ✅ Live | Make.com scenarios + ElevenLabs Custom Channel |
+| Instagram DMs @new_digital_intelligence | ✅ Live (new account + new Meta app, 21 Sep) | Make.com scenarios + ElevenLabs Custom Channel |
 | Hosted web page / QR code | ✅ Live | ElevenLabs talk-to link (not password protected) |
 | **This web app** (chat, file upload, voice, video avatar, channel links) | ✅ Live | Next.js on Vercel: https://cda-demo.vercel.app (password protected) |
 | Video avatar (Avatar tab) | ✅ Live | **Anam** avatar "Sofia" (the user's own Ellie picture) joined to the ElevenLabs agent |
@@ -103,7 +103,7 @@ can be regenerated from the talk-to link. The script that generated the PDFs was
 - `src/components/AssistantApp.tsx`: tabs Chat / Voice / Avatar
 - `src/app/api/elevenlabs/*`: signed URL (chat) and conversation token (voice)
 - `src/app/api/anam/session/route.ts` + `src/components/AvatarPanel.tsx`: Anam avatar. The server gets an ElevenLabs signed URL and creates an Anam session token (`avatarModel: cara-4`, `maxSessionLengthSeconds`, `directorNotes` warm 0.5, `sessionOptions` 1152×768 or 768×1152, `environment.elevenLabsAgentSettings`). Anam Lab stores **no** ElevenLabs link; the "Olivia" persona in Lab is not used
-- `src/components/ChannelLinks.tsx`: Email (Gmail compose), Telegram and Instagram buttons (Instagram label shows @CDA_2026_Support_Bot but opens @samrasellimi)
+- `src/components/ChannelLinks.tsx`: Email (Gmail compose), Telegram and Instagram buttons (Instagram opens @new_digital_intelligence)
 - **Cross-channel customer memory** (CHANNEL_SETUP.md §16), live and tested against production:
   - `src/app/api/agent/*`: the two agent tools and the post-call webhook. Exempt from the site
     password in `src/proxy.ts`, protected by a shared secret / HMAC instead (`src/lib/agentAuth.ts`)
@@ -142,7 +142,9 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
    channel by pasting a short code into it; Ellie never asks anyone to identify themselves.
    - **Never** bind a tool parameter to a channel-specific dynamic variable: it breaks every other
      channel, and a placeholder on `integration__telegram_chat_id` took Telegram down completely
-   - Left: Instagram (blocked by Meta), Slack (`integration__slack_user_id` exists, not wired up)
+   - Instagram recognised since 21 Sep: the web app reads Make's `instagram_id` from the stored
+     ElevenLabs conversation (never bound to a tool). Left: Slack (`integration__slack_user_id`
+     exists, not wired up)
    - Weak spot: Telegram identity relies on the undocumented `_tg_` ending of the conversation id
    - Parked by the user: no memory notes were seen from Telegram/email conversations since 18 Sep
      (probably simply no such conversations; check once there are some)
@@ -180,5 +182,5 @@ The earlier HeyGen LiveAvatar tab was removed (commit `69eb3da` has it).
 | ~1 Oct 2026 | Freshdesk trial ends — email no longer uses it |
 | Daily, automatic | Vercel Cron renews the Gmail watch; if emails stop, open `/api/email/gmail-watch` with the push secret |
 | ~17 Oct 2026 | ElevenLabs credits reset |
-| Before ~16 Nov 2026 | **Refresh the Instagram token** (60-day token) and update the Make reply scenario header |
+| Before ~20 Nov 2026 | **Refresh the Instagram token** (generated 21 Sep, 60 days max) and update the Make reply scenario header; the user may want this automated in Make |
 | After the demo | Rotate keys that were shared in chat (ElevenLabs, Anam, **Supabase service role**, **LiveKit**, **Google OAuth client secret** + new Gmail consent, the email Custom Channel secrets, Freshdesk), delete the Make API token, delete the unused LiveAvatar API key/secret/voice agent |

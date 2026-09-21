@@ -8,6 +8,7 @@
 // (its id is inside the conversation id) or because the person signed in on the website and sent
 // the short code from that channel.
 
+import { elevenLabsConversation } from "./elevenlabs";
 import { supabaseConfigured, supabaseRest as rest } from "./supabase";
 
 export const CHANNELS = ["telegram", "instagram", "email", "website", "slack"] as const;
@@ -86,7 +87,29 @@ export async function resolveIdentity(body: Record<string, unknown>): Promise<Id
   const sender = await emailSender(conversationId);
   if (sender) return { channel: "email", key: sender.email, name: sender.name };
 
+  const instagram = await instagramSender(conversationId);
+  if (instagram) return { channel: "instagram", key: instagram };
+
   return null;
+}
+
+/**
+ * Instagram DMs reach Ellie through Make and a Custom Channel trigger, and Make passes the sender's
+ * id as the dynamic variable `instagram_id`. It is read here from the stored conversation, never
+ * bound to a tool parameter: a tool bound to a variable that only Instagram sends would fail on
+ * every other channel.
+ */
+async function instagramSender(conversationId: string): Promise<string | null> {
+  if (!conversationId) return null;
+  try {
+    const record = await elevenLabsConversation(conversationId);
+    if (record.metadata?.async_metadata?.external_system !== "custom_channel") return null;
+    const id = record.conversation_initiation_client_data?.dynamic_variables?.instagram_id;
+    return typeof id === "string" && /^\d{5,30}$/.test(id) ? id : null;
+  } catch (error) {
+    console.error("Instagram sender lookup failed", error);
+    return null;
+  }
 }
 
 /** An email that reached Ellie through Gmail push: the web app noted who sent it (src/lib/emailInbox.ts). */
