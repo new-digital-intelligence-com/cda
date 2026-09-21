@@ -268,13 +268,23 @@ async function handleIncoming(gmailId: string) {
 
 // --- Ellie's answer ----------------------------------------------------------------------------
 
+/** Each item in `data` is `{ type, event }`; an agent_response's text is `event.agent_response`. */
 export type ReplyWebhook = {
   conversation_id?: string;
   user_message_ids?: string[];
   status?: string;
   error?: unknown;
-  data?: { type?: string; agent_response?: string }[];
+  data?: { type?: string; event?: { agent_response?: unknown } }[];
 };
+
+/** Everything Ellie said in this turn, in order. */
+function replyText(payload: ReplyWebhook): string {
+  return (payload.data ?? [])
+    .filter((item) => item.type === "agent_response")
+    .map((item) => item.event?.agent_response)
+    .filter((text): text is string => typeof text === "string" && text.trim().length > 0)
+    .join("\n\n");
+}
 
 async function rowFor(payload: ReplyWebhook): Promise<EmailRow | null> {
   const gmailId = payload.user_message_ids
@@ -305,13 +315,15 @@ export async function handleEllieReply(payload: ReplyWebhook): Promise<{ outcome
     return { outcome: "failed" };
   }
 
-  const text = plainReply(
-    (payload.data ?? [])
-      .filter((event) => event.type === "agent_response" && typeof event.agent_response === "string")
-      .map((event) => event.agent_response as string)
-      .join("\n\n"),
-  );
-  if (!text) return { outcome: "no text in this turn" };
+  const text = plainReply(replyText(payload));
+  if (!text) {
+    // Not expected: every email turn ends with an answer. Say so loudly instead of waiting forever.
+    console.error("ellie-reply: no agent_response text", JSON.stringify(payload).slice(0, 1000));
+    if (await move(row.gmail_id, ["new", "waiting"], { status: "failed", reason: "Ellie's answer had no text" })) {
+      await label(row.gmail_id, "failed");
+    }
+    return { outcome: "no text in this turn" };
+  }
 
   if (isSkip(text)) {
     if (await move(row.gmail_id, ["new", "waiting"], { status: "skipped", reason: "Ellie: not written by a customer" })) {

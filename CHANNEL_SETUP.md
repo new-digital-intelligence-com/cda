@@ -841,6 +841,7 @@ enough for a demo but not for real traffic.
 | Email labelled **Ellie/Failed** | Ellie or Gmail could not be reached; the reason is on the staff card on `/aida`. Answer it by hand. "Google sign-in failed: invalid_grant" in the logs → run the Gmail consent again |
 | A customer's email labelled **Ellie/Skipped** | A rule or Ellie took it for a robot; the reason is on the staff card. Answer it by hand, and adjust the rules in `src/lib/emailParse.ts` if it keeps happening |
 | A customer gets two answers to one email | The old Freshdesk trigger is still on Ellie → remove it |
+| Ellie's email answer is in ElevenLabs but never sent; the email stays "Ellie is writing…" | The reply webhook's text is at `data[].event.agent_response`, not `data[].agent_response` (the first live test on 21 Sep hit exactly this; fixed). ElevenLabs shows `delivery_status: success` because the route answered 200 |
 | Voice widget test error "draft_from_user_id" | Use the **Inline** test mode or refresh the page |
 | Avatar call fails to start | The real reason is in the browser console (F12 → Console) and the Vercel function logs. Check the `ANAM_*` variables, that the agent's input format is PCM 16000 Hz, and the Anam plan's call length (old LiveAvatar lesson: `max_session_duration (180s) exceeds the maximum allowed (120s)`) |
 | Our HeyGen "Ellie" avatar can't answer live | HeyGen app avatars only make recorded videos → recreate the face from the same picture on a live platform (done with Anam, free) |
