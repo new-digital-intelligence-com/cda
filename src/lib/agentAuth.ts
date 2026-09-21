@@ -6,28 +6,37 @@ import { constantTimeEqual, sha256Hex } from "./auth";
 
 export const AGENT_SECRET_HEADER = "x-cda-agent-secret";
 
-/** Replay window for the post-call webhook, matching ElevenLabs' own examples. */
+/** Replay window for signed webhooks, matching ElevenLabs' own examples. */
 const MAX_SIGNATURE_AGE_SECONDS = 30 * 60;
 
 export function agentToolSecretConfigured(): boolean {
   return Boolean(process.env.AGENT_TOOL_SECRET);
 }
 
-export async function hasValidToolSecret(request: Request): Promise<boolean> {
-  const expected = process.env.AGENT_TOOL_SECRET;
-  const provided = request.headers.get(AGENT_SECRET_HEADER);
+/** False when either side is missing. Compares hashes, so the time taken says nothing about the secret. */
+export async function secretMatches(provided: string | null | undefined, expected: string | undefined): Promise<boolean> {
   if (!expected || !provided) return false;
-  // Compare hashes so the comparison time does not depend on the secret's length.
   return constantTimeEqual(await sha256Hex(provided), await sha256Hex(expected));
+}
+
+export async function hasValidToolSecret(request: Request): Promise<boolean> {
+  return secretMatches(request.headers.get(AGENT_SECRET_HEADER), process.env.AGENT_TOOL_SECRET);
 }
 
 function hex(buffer: ArrayBuffer): string {
   return Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-/** Header format is `t=<unix seconds>,v0=<hex>`, signed over `<t>.<raw body>` with SHA-256. */
-export async function hasValidWebhookSignature(rawBody: string, header: string | null): Promise<boolean> {
-  const secret = process.env.ELEVENLABS_WEBHOOK_SECRET;
+/**
+ * Header format is `t=<unix seconds>,v0=<hex>`, signed over `<t>.<raw body>` with SHA-256. The
+ * post-call webhook and the email Custom Channel's replies sign the same way, each with its own
+ * secret.
+ */
+export async function hasValidWebhookSignature(
+  rawBody: string,
+  header: string | null,
+  secret: string | undefined = process.env.ELEVENLABS_WEBHOOK_SECRET,
+): Promise<boolean> {
   if (!secret || !header) return false;
 
   const parts = new Map<string, string>();

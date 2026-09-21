@@ -3,7 +3,7 @@
 Demo built by **NDI (New Digital Intelligence)** for **CDA** (UK kitchen appliance brand, www.cda.co.uk).
 It is a demo and not an official CDA service.
 
-Last updated: **18 September 2026**
+Last updated: **21 September 2026**
 
 > **Secrets are not written in this file.** API keys, tokens and passwords are stored in the tools
 > themselves (ElevenLabs, Make.com, Anam, Slack, Vercel, `.env.local`). See [Credentials and where they live](#12-credentials-and-where-they-live).
@@ -16,7 +16,7 @@ Last updated: **18 September 2026**
 2. [Core: the ElevenLabs agent "Ellie"](#2-core-the-elevenlabs-agent-ellie)
 3. [Knowledge base](#3-knowledge-base)
 4. [Telegram](#4-telegram)
-5. [Email (Freshdesk)](#5-email-freshdesk)
+5. [Email (Gmail + Custom Channel)](#5-email-gmail--custom-channel)
 6. [Web chat and voice (ElevenLabs hosted page)](#6-web-chat-and-voice-elevenlabs-hosted-page)
 7. [Custom web app (Next.js on Vercel)](#7-custom-web-app-nextjs-on-vercel)
 8. [Instagram (Make.com + ElevenLabs Custom Channel)](#8-instagram-makecom--elevenlabs-custom-channel)
@@ -45,7 +45,7 @@ Telegram, email and the website and remembers what they asked before — see
                          ┌──────────────────────────────────────────┐
  Telegram bot ──────────►│                                          │
                          │     ElevenLabs agent "CDA Assistant –    │
- Email ─► Freshdesk ────►│     Demo" (Ellie)                        │
+ Email ─► Gmail ─► app ─►│     Demo" (Ellie)                        │
                          │                                          │
  Web page / QR code ────►│  • Gemini 3.7 Flash                      │
                          │  • British voice                         │
@@ -65,14 +65,15 @@ Telegram, email and the website and remembers what they asked before — see
 | Channel | How it connects to Ellie | Code needed? |
 |---|---|---|
 | Telegram | Native ElevenLabs Telegram trigger | No |
-| Email | Native ElevenLabs Freshdesk trigger | No |
+| Email | Gmail push → the web app → ElevenLabs Custom Channel; the web app sends the reply or leaves a Gmail draft | Yes (web app routes) |
 | Web chat + voice | ElevenLabs hosted page (talk-to link) | No |
 | Web app | ElevenLabs React SDK in a Next.js app | Yes (own repo) |
 | Instagram | Make.com scenarios + ElevenLabs Custom Channel | No code (Make blocks) |
 | Video avatar | Anam avatar (our Ellie picture) joined to the ElevenLabs agent, in the web app's **Avatar** tab | Small (one API route + Anam SDK) |
 | Slack | Native ElevenLabs Slack trigger (in progress) | No |
 
-**Mode:** only **Agent mode** is active (Ellie replies directly). Copilot mode (draft only) is parked.
+**Mode:** **Agent mode** (Ellie replies directly) everywhere. Two places let staff check first: email
+can be switched to **drafts** (section 5), and **Aida rooms** draft answers for staff on live calls (section 17).
 
 ---
 
@@ -122,6 +123,9 @@ The prompt is edited in **Agent → System prompt**. Sections:
   - **Telegram only**: text only, cannot see photos or voice notes
   - **Instagram only**: plain text, no markdown, under 900 characters
   - **Website chat**: can read attached images and PDFs
+  - **Email only**: messages starting `[Email to CDA customer care]`; plain-text email body signed
+    "Ellie, CDA virtual assistant", never asks for the email address, cannot open attachments, answers
+    exactly `SKIP` to anything not written by a person who wants help (section 5)
 - **Goal**: products, warranty and registration, repairs, spare parts and manuals, where to buy
 - **Knowledge rules**: only facts from the knowledge base; check model numbers; discontinued products;
   - conflicting sources: give both statements briefly (never mention "older FAQs" or internal documents)
@@ -260,39 +264,116 @@ The `url` must point to `api.us.elevenlabs.io/.../telegram/triggers/message?...`
 
 ---
 
-## 5. Email (Freshdesk)
+## 5. Email (Gmail + Custom Channel)
+
+Since 21 September 2026 email no longer goes through Freshdesk. The web app reads the mailbox
+through the Gmail API, hands each email to Ellie through a Custom Channel trigger of its own, and
+**sends her reply or leaves it as a Gmail draft**, depending on a switch staff control.
 
 | Item | Value |
 |---|---|
 | Customer email address | **cda_domestic_appliances@new-digital-intelligence.com** (Google Workspace mailbox) |
-| Helpdesk | Freshdesk **14-day trial**, portal `newdigitalintelligence-help.freshdesk.com` |
-| Mailbox connection | Freshdesk **custom mailbox** with Google sign-in (IMAP `imap.gmail.com` + SMTP `smtp.gmail.com`, OAuth) |
-| Freshdesk agent ID used as responder | `158020727358` |
-| ElevenLabs trigger | Freshdesk **Ticket Event**, Shadow Mode **OFF** |
+| Google Cloud project | `cda-email-509312` (billing linked; Pub/Sub stays inside the free tier) |
+| Gmail access | OAuth client "Desktop", consent screen **Internal**, scope `gmail.modify`, one refresh token for the mailbox |
+| Pub/Sub | Topic `gmail-inbox` (publisher: `gmail-api-push@system.gserviceaccount.com`), push subscription `gmail-inbox-push` → `https://cda-demo.vercel.app/api/email/gmail-push?token=<GMAIL_PUSH_SECRET>`, never expires, ack deadline 60 s |
+| ElevenLabs trigger | Ellie → Channels → **Custom Channel**, connection **CDA email** (`trigger_cxn_4401m321spm3f9nah3y9bsn5mn4n`), Reply Webhook URL `https://cda-demo.vercel.app/api/email/ellie-reply`. Separate from Instagram's trigger |
+| Reply or draft | `email_mode` = `auto` or `draft`, a dynamic variable placeholder on the **Aida** agent |
 
 ### How it works
 
 ```
-Customer email → Google mailbox → Freshdesk ticket → ElevenLabs Freshdesk trigger → Ellie
-             ← reply sent by Freshdesk from cda_domestic_appliances@… ←
+Customer email → Gmail → Pub/Sub → /api/email/gmail-push
+     → rules skip codes, alerts, newsletters, no-reply senders   (no credits spent)
+     → Ellie, through the "CDA email" Custom Channel
+Ellie's answer → /api/email/ellie-reply → reads email_mode on Aida
+     → auto:  sent in the customer's thread        → label Ellie/Replied
+     → draft: a Gmail draft in the customer's thread → label Ellie/Draft ready
 ```
 
-A reply normally arrives within about a minute.
+A reply normally arrives within a few seconds. Every email is its own ElevenLabs conversation: a
+Custom Channel conversation ends after one turn. The customer's earlier messages are quoted in
+their email, and the customer memory (section 16) carries the rest.
 
-### Setup steps
+### Which emails get a reply
 
-1. Freshdesk trial → **skip** Freshdesk's own AI agent (Freddy), otherwise customers get two replies
-2. Freshdesk → Admin → Channels → **Email** → **New support email** → the Google address → connect via Google sign-in
-3. Rename the mailbox display name (e.g. "CDA Customer Care (Demo)") so customers don't see "Example"
-4. Freshdesk → profile → Profile settings → copy **API key**
-5. ElevenLabs workspace → **Integrations** → **Freshdesk** → Connect (API key + subdomain `newdigitalintelligence-help`)
-6. Agent → **Channels** → **Freshdesk** → Add trigger → Agent + Responder Agent ID `158020727358` + Shadow Mode OFF
+Two filters, so Ellie never answers robots:
+
+1. **Rules in the web app** (`src/lib/emailParse.ts`), before Ellie is involved: no-reply and
+   robot senders (`no-reply`, `security@`, `notification@`, `mailer-daemon`…), notification
+   services (facebookmail.com, mail.instagram.com, accounts.google.com), subjects like
+   "security code", "sign-in attempt", "out of office", Gmail's Promotions / Social / Forums tabs,
+   newsletter and bulk headers, bounces, and more than 5 emails from one sender in an hour.
+   Checked against the real mailbox: every Google, Instagram and Facebook code or alert was
+   skipped, and every email written by a person went through.
+2. **Ellie's judgement**: her prompt ("Email only") tells her to answer exactly `SKIP` when an
+   email was not written by someone who wants help from CDA.
+
+Mail older than 24 hours, mail from the mailbox itself, and anything already handled is never
+answered. Replies sent automatically carry `Auto-Submitted: auto-replied`, so out-of-office robots
+do not answer back and start a loop.
+
+### Labels in Gmail
+
+Under **Ellie** in Gmail's side bar:
+
+| Label | Meaning |
+|---|---|
+| **Ellie/Replied** (green) | Ellie's answer was sent. The email is marked read |
+| **Ellie/Draft ready** (orange) | Draft mode: open the email, check the draft under it, press **Send**. The email stays unread |
+| **Ellie/Skipped** (grey) | Not answered: a robot, a newsletter, or Ellie said SKIP. The reason is on the staff page |
+| **Ellie/Failed** (red) | Ellie or Gmail could not be reached. Answer it by hand |
+
+### Switching between sending and drafts
+
+The switch is the dynamic variable placeholder **`email_mode`** on the agent **Aida – CDA copilot**
+(`auto` or `draft`; anything unreadable counts as `draft`). It is read again for every reply.
+
+- **Website**: `/aida` → staff password → **Email replies** card → *Send automatically* / *Draft for
+  staff*. The card also lists the latest emails with what happened to each and an "Open in Gmail" link
+- **Claude** with the ElevenLabs connector: *"Set the dynamic variable placeholder email_mode on the
+  agent Aida – CDA copilot to draft"* (or `auto`)
+
+It sits on Aida, not Ellie, on purpose: a placeholder on Ellie could change how her channel triggers
+start conversations (an `integration__` placeholder once took Telegram down). Aida has no channels,
+and nothing in her prompt uses it.
+
+### The routes
+
+| Route | Called by | Protected by |
+|---|---|---|
+| `POST /api/email/gmail-push` | Google Pub/Sub | `?token=` = `GMAIL_PUSH_SECRET` |
+| `POST /api/email/ellie-reply` | ElevenLabs (Custom Channel replies) | HMAC signature, `EMAIL_CHANNEL_SIGNING_SECRET` |
+| `GET /api/email/gmail-watch` | Vercel Cron, daily at 06:00 UTC (`vercel.json`) | `Bearer CRON_SECRET` (or `GMAIL_PUSH_SECRET` by hand) |
+| `GET/POST /api/email/mode` | The staff card on `/aida` | Aida staff token |
+
+All four are exempt from the site password in `src/proxy.ts`. Gmail stops posting 7 days after a
+watch starts, so the daily cron renews it and also catches up on anything a missed notification
+left behind.
+
+**Supabase** (`supabase/schema.sql`): `email_messages` has one row per email — who wrote, subject,
+status, reason, Ellie's conversation. Never the text. Inserting the row is the lock that stops a
+repeated notification from answering twice. `gmail_state` holds how far the inbox has been read.
+
+### Setup steps (done 21 September 2026)
+
+1. Google Cloud → new project → link billing → enable **Gmail API** and **Cloud Pub/Sub API**
+2. **OAuth consent screen**: Internal. **Credentials** → OAuth client ID → **Desktop app**
+3. Consent as the CDA mailbox with scope `gmail.modify` → refresh token (a one-off local script)
+4. Pub/Sub: topic `gmail-inbox` → grant **Pub/Sub Publisher** to `gmail-api-push@system.gserviceaccount.com`
+   → push subscription to `/api/email/gmail-push?token=…`, never expires, ack deadline 60 s
+5. ElevenLabs → Ellie → Channels → Custom Channel → Add trigger → **new** connection → Reply Webhook URL
+   `/api/email/ellie-reply` → copy the Inbound URL, Inbound Secret and Outbound Signing Secret
+6. Run `supabase/schema.sql`; set the email variables (section 7) in `.env.local` and on Vercel
+7. Start the watch once: `GET /api/email/gmail-watch` with `Authorization: Bearer <GMAIL_PUSH_SECRET>`
 
 ### Notes
 
-- Test from an address that is **not** the Freshdesk login address
-- **Shadow Mode ON** = Ellie writes a private note instead of replying (possible future "copilot" mode for email)
-- Freshdesk **trial ends about 1 October 2026** (trial started 17 September); after that a paid Freshdesk plan is needed
+- **Freshdesk is no longer used for email.** Remove its trigger from Ellie (Channels → Freshdesk), or
+  customers could get a second answer if Freshdesk starts importing mail again. Old Freshdesk
+  conversations (`_fd_` ids) are still recognised by the customer memory
+- The refresh token belongs to the CDA mailbox. If its password changes or access is removed in the
+  Google account, email stops (Ellie/Failed, or nothing at all): run the consent again
+- The Custom Channel is **Alpha** and text only: Ellie cannot open attachments, and her prompt tells her so
 
 ---
 
@@ -361,6 +442,9 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `src/components/AvatarPanel.tsx` | Avatar tab (Anam SDK video, captions, end call) |
 | `src/app/api/anam/session/route.ts` | Creates the Anam session token joined to Ellie (both API keys stay on the server) |
 | `src/proxy.ts`, `src/lib/auth.ts`, `src/app/login/` | Password lock |
+| `src/lib/emailInbox.ts`, `src/lib/gmail.ts`, `src/lib/emailParse.ts`, `src/lib/emailMode.ts`, `src/app/api/email/` | The email channel (section 5) |
+| `src/components/aida/EmailModeCard.tsx` | Staff switch between sending and drafts, and the latest emails (on `/aida`) |
+| `vercel.json` | Daily cron that renews the Gmail watch |
 
 ### Environment variables (Vercel → Settings → Environment Variables, and `.env.local` locally)
 
@@ -384,6 +468,14 @@ If used on a real site, add the domain in **Security → Allowlist**.
 | `AIDA_STAFF_PASSWORD` | Password that makes someone CDA staff in Aida rooms (separate from `SITE_PASSWORD`) |
 | `gmail_sender` | `cda_domestic_appliances@new-digital-intelligence.com` — sends conversation emails (lower-case name) |
 | `gmail_app_password` | Gmail app password for that mailbox (16 characters) — server only |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth client (Desktop) of project `cda-email-509312` — the email channel (section 5) |
+| `GMAIL_REFRESH_TOKEN` | The CDA mailbox's Gmail sign-in, scope `gmail.modify` — server only |
+| `GMAIL_PUBSUB_TOPIC` | `projects/cda-email-509312/topics/gmail-inbox` |
+| `GMAIL_PUSH_SECRET` | Random secret in the Pub/Sub push URL (`?token=`) |
+| `CRON_SECRET` | Random secret Vercel Cron sends to `/api/email/gmail-watch` |
+| `EMAIL_CHANNEL_INBOUND_URL` | Inbound Webhook URL of Ellie's "CDA email" Custom Channel trigger |
+| `EMAIL_CHANNEL_INBOUND_SECRET` | That trigger's Inbound Secret (sent as `X-Webhook-Secret`) |
+| `EMAIL_CHANNEL_SIGNING_SECRET` | That trigger's Outbound Signing Secret (checks Ellie's replies) |
 
 After changing a variable on Vercel → **Redeploy**.
 
@@ -644,6 +736,8 @@ Example prompts:
 - "Show the last 10 conversations of CDA Assistant – Demo and list questions it couldn't answer."
 - "How big is CDA Assistant – Demo's knowledge base?"
 - "Estimate the cost per conversation of CDA Assistant – Demo."
+- "Set the dynamic variable placeholder email_mode on the agent Aida – CDA copilot to draft." (or `auto`):
+  switches Ellie's email replies between Gmail drafts and sending straight away (section 5)
 
 ---
 
@@ -653,8 +747,10 @@ Example prompts:
 |---|---|---|
 | ElevenLabs API key | Vercel env vars, `cda-web-app/.env.local` | Was shared in chat → rotate after the demo |
 | Telegram bot token | ElevenLabs Telegram connection | From @BotFather |
-| Freshdesk API key | ElevenLabs Freshdesk connection, Vercel env vars, `.env.local` | Also used to find who wrote an email ticket (section 16) |
-| Google mailbox access | Freshdesk (Google OAuth) | |
+| Freshdesk API key | ElevenLabs Freshdesk connection, Vercel env vars, `.env.local` | Only for old Freshdesk tickets now (section 16). Was shared in chat → rotate or close Freshdesk |
+| Google OAuth client secret + Gmail refresh token | Vercel env vars, `.env.local` | Full access to the CDA mailbox. The client secret was shared in chat → reset it in Google Cloud → Credentials after the demo, then run the consent again |
+| `GMAIL_PUSH_SECRET`, `CRON_SECRET` | Vercel env vars, `.env.local`; the push secret is also in the Pub/Sub subscription URL | Generated randomly |
+| Email Custom Channel secrets (inbound + signing) | ElevenLabs "CDA email" trigger, Vercel env vars, `.env.local` | Shared in chat → regenerate after the demo |
 | Google Drive access | ElevenLabs Google Drive integration | Read-only, picked files only |
 | Custom Channel secrets (input/output) | ElevenLabs trigger; input secret in Make HTTP header | |
 | Instagram access token | Make scenario "IG – Ellie reply out" (Authorization header) | **Expires every 60 days** |
@@ -676,12 +772,13 @@ Example prompts:
 
 | When | What |
 |---|---|
-| ~1 Oct 2026 | Freshdesk trial ends → choose a plan or email stops |
+| ~1 Oct 2026 | Freshdesk trial ends — email no longer needs it (section 5) |
+| Daily, automatic | Vercel Cron renews the Gmail watch (it lapses after 7 days without renewal) |
 | Early/mid Oct 2026 | Make free operations reset (1,000/month) |
 | 17 Oct 2026 | ElevenLabs Creator credits reset |
 | **Before ~16 Nov 2026** | **Refresh the Instagram token** (link in section 8) and update the Make reply scenario header |
 | Monthly | Anam free plan gives 30 avatar minutes |
-| After the demo | Rotate the ElevenLabs API key (update Vercel), rotate the Anam API key, **rotate the Supabase service role key**, **rotate the LiveKit key**, delete the Make API token and the old LiveAvatar key |
+| After the demo | Rotate the ElevenLabs API key (update Vercel), rotate the Anam API key, **rotate the Supabase service role key**, **rotate the LiveKit key**, **reset the Google OAuth client secret** (then run the Gmail consent again), regenerate the email Custom Channel secrets, delete the Make API token and the old LiveAvatar key |
 | When CDA content changes | Update the PDFs in Drive (auto sync) |
 
 ---
@@ -694,7 +791,7 @@ Example prompts:
 | **Avatar for the CDA demo** | Optional | Anam Explorer ($49/month): no watermark, 10-minute calls, 250 minutes (section 9) |
 | **WhatsApp** | Parked | Meta restricted the WhatsApp Business account; needs an appeal and an own brand name. Live calls also need a 2,000/day messaging limit |
 | **Phone number** | Parked | No real phone number; the SIP import of a mobile number was removed (mobile SIMs can't route to SIP) |
-| **Copilot mode** | Parked | Draft-only mode (e.g. Freshdesk Shadow Mode, or a second agent) |
+| **Copilot mode** | Partly built | Email drafts for staff (section 5) and Aida rooms for live calls (section 17). Other channels still reply directly |
 
 ### Phone calls: what's needed
 
@@ -718,7 +815,6 @@ play a short "trial account" message, so upgrade Twilio before showing it to CDA
 | Channel | How | Cost | Effort |
 |---|---|---|---|
 | **Facebook Messenger** | Same as Instagram: Make.com + Custom Channel, same Meta app | Free (needs a Facebook Page) | Low (copy the Instagram scenarios) |
-| **Email without Freshdesk** | Make.com Gmail module + Custom Channel | Free | Low, useful when the Freshdesk trial ends (~1 Oct 2026) |
 | **WhatsApp** | Native ElevenLabs (messages and voice calls) | Free | Blocked while Meta restricts the account; voice calls need a 2,000/day messaging limit |
 | **Intercom / Zendesk** | Native ElevenLabs triggers | Paid after a trial | Medium |
 
@@ -740,7 +836,11 @@ enough for a demo but not for real traffic.
 | Meta: "Insufficient developer role" | Add the Instagram account as **Instagram Tester** and accept the invite |
 | Meta webhook "couldn't be validated" | Make must answer with `hub.challenge`; filter must compare `hub.verify_token` |
 | Instagram DMs don't arrive | Meta app must be **Published** (needs a privacy policy URL) |
-| Freshdesk replies twice | Freshdesk's own AI agent (Freddy) is on → keep it off |
+| Freshdesk replies twice | Freshdesk's own AI agent (Freddy) is on → keep it off (Freshdesk is no longer used for email) |
+| An email gets no reply and no Ellie label | Watch lapsed or Pub/Sub not delivering: open `/api/email/gmail-watch` with the push secret (section 5), then check Vercel's function logs for `gmail-push` |
+| Email labelled **Ellie/Failed** | Ellie or Gmail could not be reached; the reason is on the staff card on `/aida`. Answer it by hand. "Google sign-in failed: invalid_grant" in the logs → run the Gmail consent again |
+| A customer's email labelled **Ellie/Skipped** | A rule or Ellie took it for a robot; the reason is on the staff card. Answer it by hand, and adjust the rules in `src/lib/emailParse.ts` if it keeps happening |
+| A customer gets two answers to one email | The old Freshdesk trigger is still on Ellie → remove it |
 | Voice widget test error "draft_from_user_id" | Use the **Inline** test mode or refresh the page |
 | Avatar call fails to start | The real reason is in the browser console (F12 → Console) and the Vercel function logs. Check the `ANAM_*` variables, that the agent's input format is PCM 16000 Hz, and the Anam plan's call length (old LiveAvatar lesson: `max_session_duration (180s) exceeds the maximum allowed (120s)`) |
 | Our HeyGen "Ellie" avatar can't answer live | HeyGen app avatars only make recorded videos → recreate the face from the same picture on a live platform (done with Anam, free) |
@@ -816,7 +916,7 @@ on every channel. This matters, see the warning below.
 | Channel | How the person is identified |
 |---|---|
 | Telegram | The chat id is inside the conversation id: `conv_85_..._tg_6486763839` |
-| Email | The ticket number is inside the conversation id (`..._fd_9`); Freshdesk is then asked who the requester is, which also gives their name |
+| Email | The web app knows the sender of every email it hands to Ellie. It ties the conversation to that address as soon as ElevenLabs names it, and `customer_lookup` waits up to a second for that to land (section 5). Old Freshdesk conversations: the ticket number in the conversation id (`..._fd_9`) |
 | Website chat / voice / avatar | The server registers the conversation against the signed-in account, or the `cda_visitor` cookie, when the session is created |
 | Instagram | Make sends `dynamic_variables: {"instagram_id": ...}`, but the channel is blocked by Meta |
 | Slack | `integration__slack_user_id` exists, but is not wired up yet |

@@ -1,4 +1,5 @@
--- Customer memory shared by every channel (Telegram, Instagram, email, website, Slack).
+-- Customer memory shared by every channel (Telegram, Instagram, email, website, Slack), Aida
+-- rooms, and the email channel's record of what Ellie did with each email.
 -- Run this once in the Supabase project: SQL Editor -> New query -> paste -> Run.
 --
 -- A customer is a person. Every way of reaching them - a Telegram chat, an Instagram sender id, an
@@ -112,3 +113,42 @@ create index if not exists aida_events_room_idx on aida_events (room_id, id);
 
 alter table aida_rooms  enable row level security;
 alter table aida_events enable row level security;
+
+-- ---------------------------------------------------------------------------------------------
+-- Email: mail to the CDA mailbox arrives through Gmail push, Ellie answers through a Custom
+-- Channel, and the web app sends her reply or leaves it as a Gmail draft (src/lib/emailInbox.ts).
+-- ---------------------------------------------------------------------------------------------
+
+-- One row per email. Inserting it is what stops a repeated notification from answering twice.
+-- Who wrote and the subject only; the text of the email stays in Gmail.
+create table if not exists email_messages (
+  gmail_id          text primary key,             -- Gmail's message id
+  thread_id         text not null,
+  from_email        text,
+  from_name         text,
+  reply_to          text,
+  subject           text,
+  message_id        text,                         -- RFC 822 Message-ID, for In-Reply-To
+  references_header text,
+  status            text not null default 'new',  -- new | waiting | replying | sent | draft | skipped | failed
+  reason            text,                         -- why it was skipped or failed
+  conversation_id   text unique,                  -- Ellie's conversation for this email
+  mode              text,                         -- auto | draft, as it was when the reply came back
+  received_at       timestamptz,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create index if not exists email_messages_recent_idx on email_messages (created_at desc);
+create index if not exists email_messages_sender_idx on email_messages (from_email, created_at desc);
+
+-- Where Gmail push has got to: the mailbox history id already handled. A single row.
+create table if not exists gmail_state (
+  id               int primary key default 1 check (id = 1),
+  history_id       bigint not null,
+  watch_expires_at timestamptz,
+  updated_at       timestamptz not null default now()
+);
+
+alter table email_messages enable row level security;
+alter table gmail_state    enable row level security;

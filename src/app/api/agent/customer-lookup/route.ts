@@ -3,11 +3,15 @@ import {
   customerForChannel,
   customerForConversation,
   customerStoreConfigured,
+  mayBeRegisteredLate,
   profileFor,
   rememberConversation,
   resolveIdentity,
   type Profile,
 } from "@/lib/customers";
+
+const LATE_REGISTRATION_CHECKS = 3;
+const LATE_REGISTRATION_WAIT_MS = 400;
 
 /** Only say "found" when there is something worth saying, not merely that a row exists. */
 function answer(profile: Profile) {
@@ -33,15 +37,21 @@ export async function POST(request: Request) {
     const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : "";
 
     // Website chat, voice and the avatar registered themselves when their session was created.
-    const registered = await customerForConversation(conversationId);
+    // An email is registered a moment after Ellie receives it, so give that a second to land.
+    let registered = await customerForConversation(conversationId);
+    for (let attempt = 0; !registered && attempt < LATE_REGISTRATION_CHECKS && mayBeRegisteredLate(conversationId); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, LATE_REGISTRATION_WAIT_MS));
+      registered = await customerForConversation(conversationId);
+    }
     if (registered) return answer(await profileFor(registered));
 
     const identity = await resolveIdentity(body);
     if (!identity) return Response.json({ found: false });
 
     // First time on this channel: remember it anyway, so the next conversation on the same channel
-    // picks up where this one left off. An email address comes from the Freshdesk ticket, which
-    // proves it; a Telegram chat id proves nothing until they link it with a code.
+    // picks up where this one left off. An email address comes from the email itself (the Gmail
+    // message or the Freshdesk ticket), which is taken as proof; a Telegram chat id proves nothing
+    // until they link it with a code.
     const customer = await customerForChannel(identity, identity.channel === "email");
     await rememberConversation(conversationId, customer.id, identity.channel);
 

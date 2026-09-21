@@ -83,7 +83,34 @@ export async function resolveIdentity(body: Record<string, unknown>): Promise<Id
     if (requester) return { channel: "email", key: requester.email, name: requester.name };
   }
 
+  const sender = await emailSender(conversationId);
+  if (sender) return { channel: "email", key: sender.email, name: sender.name };
+
   return null;
+}
+
+/** An email that reached Ellie through Gmail push: the web app noted who sent it (src/lib/emailInbox.ts). */
+async function emailSender(conversationId: string): Promise<{ email: string; name?: string } | null> {
+  if (!conversationId) return null;
+  try {
+    const rows = await rest<{ from_email: string | null; from_name: string | null }[]>(
+      `email_messages?conversation_id=eq.${q(conversationId)}&select=from_email,from_name&limit=1`,
+    );
+    const email = normaliseEmail(rows[0]?.from_email);
+    return email ? { email, name: rows[0]?.from_name ?? undefined } : null;
+  } catch (error) {
+    console.error("Email sender lookup failed", error);
+    return null;
+  }
+}
+
+/**
+ * True for a conversation the web app may still be about to register: an email is handed to Ellie
+ * a moment before the push handler records which conversation it became. Telegram and Freshdesk
+ * carry their id in the conversation id, so they never need to wait.
+ */
+export function mayBeRegisteredLate(conversationId: string): boolean {
+  return Boolean(conversationId) && !TELEGRAM_CHAT.test(conversationId) && !FRESHDESK_TICKET.test(conversationId);
 }
 
 // --- customers and their channels ------------------------------------------------------------

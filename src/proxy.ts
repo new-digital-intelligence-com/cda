@@ -13,6 +13,11 @@ export async function proxy(request: NextRequest) {
   // — see src/lib/agentAuth.ts — and each route rejects anything unsigned.
   if (pathname.startsWith("/api/agent/")) return NextResponse.next();
 
+  // The email channel: Google Pub/Sub, ElevenLabs and Vercel Cron call these, never a browser with
+  // the site password. Each route checks its own proof: the secret in the Pub/Sub URL, the reply's
+  // HMAC signature, the cron secret, or the Aida staff token for the staff switch.
+  if (pathname.startsWith("/api/email/")) return NextResponse.next();
+
   // Aida has its own staff password, separate from this one. Its pages and routes are open here and
   // every route decides for itself: the Aida staff token makes you an employee, a signed room ticket
   // proves you are in the room, and anyone else is a customer.
