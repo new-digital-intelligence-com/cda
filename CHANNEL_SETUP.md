@@ -340,6 +340,14 @@ customer can keep asking follow-up questions.
   Linking it to a CDA account with a code is not possible by voice.
 - For the demo the skill stays in **Development** (your own Amazon account only). Publishing it for
   everyone needs Amazon's certification.
+- *"There was a problem with the requested skill's response"* means Amazon got no usable answer.
+  First look at **Build → Endpoint**: the **Default Region** URL empties itself if the page is saved
+  while it is blank, and then Alexa has nowhere to call (this happened on 22 Sep). Put
+  `https://cda-demo.vercel.app/api/alexa` back with the wildcard certificate option and save.
+  If the URL is right, the Vercel logs show whether Amazon reached us and with what answer.
+- An app on **Alexa+** shows skills under **More → Alexa+ Store → Your Skills → Dev**, and a question
+  must name the skill: *"ask c d a assistant …"*. Typing only a question reaches Amazon's own
+  assistant, not Ellie — the console's "Skill Invocations" panel stays empty when that happens.
 
 ---
 

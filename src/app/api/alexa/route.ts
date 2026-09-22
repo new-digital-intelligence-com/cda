@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   // An answer that took longer than Alexa waits: read it out now.
   if (intent === CONTINUE_INTENT) {
     if (!session.pendingMessageId) return Response.json(say("There's nothing waiting. What would you like to ask?", session));
-    const answer = await waitForAnswer(session.pendingMessageId, deadlineFrom(start));
+    const answer = await waitForAnswer(session.pendingMessageId, deadlineFrom(start, body));
     if (answer) return Response.json(say(answer, { conversationId: session.conversationId }));
     return Response.json(say("I'm still checking. Say continue in a moment.", session));
   }
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     return Response.json(say("Sorry, I can't reach the CDA assistant right now. Please try again in a moment.", session));
   }
 
-  const answer = await waitForAnswer(asked.messageId, deadlineFrom(start));
+  const answer = await waitForAnswer(asked.messageId, deadlineFrom(start, body));
   if (answer) return Response.json(say(answer, { conversationId: asked.conversationId }));
   return Response.json(
     say("I'm still looking that up. Say continue to hear the answer.", {

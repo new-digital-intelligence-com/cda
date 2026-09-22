@@ -15,8 +15,12 @@ import { plainReply } from "./emailParse";
 import { supabaseConfigured, supabaseRest as rest } from "./supabase";
 
 const q = encodeURIComponent;
-/** Give up waiting for Ellie in time for Alexa's 8-second limit. */
-const ANSWER_DEADLINE_MS = 6_300;
+/**
+ * Give up waiting for Ellie in time for Alexa's 8-second limit. Counted from the moment Amazon sent
+ * the request, not from the moment this route woke up: a cold start can eat a second before any of
+ * our code runs, and Alexa's clock is the one that decides.
+ */
+const ANSWER_DEADLINE_MS = 6_600;
 const POLL_MS = 300;
 /** Amazon rejects requests whose timestamp is older than this. */
 const MAX_REQUEST_AGE_MS = 150_000;
@@ -219,8 +223,12 @@ export async function waitForAnswer(messageId: string, deadline: number): Promis
   return null;
 }
 
-export function deadlineFrom(start: number): number {
-  return start + ANSWER_DEADLINE_MS;
+export function deadlineFrom(start: number, body?: AlexaRequest): number {
+  const ours = start + ANSWER_DEADLINE_MS;
+  const sent = Date.parse(body?.request?.timestamp ?? "");
+  // A timestamp that disagrees with our clock by more than half a minute is not worth trusting.
+  if (!Number.isFinite(sent) || Math.abs(sent - start) > 30_000) return ours;
+  return Math.min(ours, sent + ANSWER_DEADLINE_MS);
 }
 
 // --- Ellie's answer arrives ------------------------------------------------------------------------------
