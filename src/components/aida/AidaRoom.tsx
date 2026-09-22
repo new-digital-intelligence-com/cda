@@ -634,7 +634,7 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
               <p className="text-center text-sm text-cda-text">Say hello, or type a message below.</p>
             )}
             {lines.map((line) => (
-              <LineView key={line.id} line={line} showApprover={isEmployee} />
+              <LineView key={line.id} line={line} />
             ))}
             {scribe.partialTranscript && (
               <p className="text-right text-sm italic text-cda-text">{scribe.partialTranscript}…</p>
@@ -771,15 +771,17 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
   );
 }
 
-export function LineView({ line, showApprover }: { line: TimelineLine; showApprover: boolean }) {
+export function LineView({ line }: { line: TimelineLine }) {
   if (line.kind === "system") {
     return <p className="text-center text-xs text-cda-text">{line.text}</p>;
   }
   if (line.kind === "approved") {
+    // An approved draft is the staff member's own answer, so it carries their name like anything
+    // else they send. The red outline is only there to remind staff that Aida wrote it first.
     return (
       <div className="max-w-[85%] rounded-2xl border border-cda-red/50 bg-white px-4 py-2 shadow-sm">
         <p className="text-xs font-semibold text-cda-red">
-          CDA Support{showApprover && line.approvedBy ? ` · sent by ${line.approvedBy}` : ""}
+          <span aria-label="typed">⌨</span> {line.approvedBy || "CDA Support"} · CDA
         </p>
         <p className="mt-0.5 whitespace-pre-wrap text-sm text-cda-dark">{line.text}</p>
       </div>

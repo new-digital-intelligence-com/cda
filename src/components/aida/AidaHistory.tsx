@@ -91,7 +91,7 @@ export function AidaHistory({ code, staffToken, onBack }: { code: string; staffT
           {lines.length === 0 ? (
             <p className="text-center text-sm text-cda-text">Nothing was said or typed in this room.</p>
           ) : (
-            lines.map((line) => <LineView key={line.id} line={line} showApprover={isStaff} />)
+            lines.map((line) => <LineView key={line.id} line={line} />)
           )}
         </section>
 

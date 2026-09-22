@@ -223,7 +223,8 @@ export function roomTranscript(events: AidaEvent[]): TranscriptLine[] {
       const who = event.author_role === "employee" ? "CDA" : "customer";
       return [{ speaker: `${event.author_name || "Someone"} (${who})`, text }];
     }
-    if (event.kind === "approved") return [{ speaker: "CDA Support", text, highlight: true }];
+    // An approved draft goes out in the staff member's name, exactly as it looked in the room.
+    if (event.kind === "approved") return [{ speaker: `${event.author_name || "CDA Support"} (CDA)`, text, highlight: true }];
     return [];
   });
 }
