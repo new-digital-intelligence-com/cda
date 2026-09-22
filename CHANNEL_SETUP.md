@@ -294,13 +294,13 @@ Good to know: long answers are split into messages of up to 2,000 characters.
 ## 6. Alexa
 
 **What the customer does:** talks to an **Amazon Echo** or the **Alexa app**:
-*"Alexa, ask c d a assistant why my oven shows F3."* Alexa reads Ellie's answer out loud, and the
+*"Alexa, ask appliance helper why my oven shows F3."* Alexa reads Ellie's answer out loud, and the
 customer can keep asking follow-up questions.
 
 **How it works**
 
 ```
-1. "Alexa, ask c d a assistant …"          → Amazon → /api/alexa (checks Amazon's signature)
+1. "Alexa, ask appliance helper …"          → Amazon → /api/alexa (checks Amazon's signature)
 2. The web app passes the question to Ellie through the "CDA Alexa" Custom Channel
    (with the marker [Alexa], so she answers in 1–3 short spoken sentences)
 3. Alexa says "One moment" while Ellie thinks
@@ -310,7 +310,7 @@ customer can keep asking follow-up questions.
 | Where | Value |
 |---|---|
 | Skill | **CDA Assistant** in the Alexa developer console (developer.amazon.com/alexa/console/ask), ID `amzn1.ask.skill.600a03ff-284b-4e60-a168-8aa279888b9a`, **English (US)** |
-| Invocation name | `c. d. a. assistant` (said "c d a assistant") |
+| Invocation name | `appliance helper` (an acronym like "c. d. a." is misheard too often; the skill is still called CDA Assistant) |
 | Endpoint | HTTPS `https://cda-demo.vercel.app/api/alexa`, certificate option "sub-domain of a domain that has a wildcard certificate" |
 | Words (interaction model) | `alexa/interaction-model.json`, generated from `src/lib/alexaModel.ts` |
 | ElevenLabs | Custom Channel, connection **CDA Alexa**, Reply Webhook URL `https://cda-demo.vercel.app/api/alexa/reply` |
@@ -327,7 +327,7 @@ customer can keep asking follow-up questions.
 5. **Build → Endpoint** → HTTPS → Default Region `https://cda-demo.vercel.app/api/alexa` → certificate
    "My development endpoint is a sub-domain of a domain that has a wildcard certificate…" → **Save**.
 6. **Test** tab → set "Skill testing is enabled in" to **Development** → type or say
-   *"ask c d a assistant what is the spare parts phone number"* → Ellie answers **01949 862019**.
+   *"ask appliance helper what is the spare parts phone number"* → Ellie answers **01949 862019**.
    On an Echo or the Alexa app it works too, if they use the same Amazon account as the developer console.
 
 **Good to know**
@@ -346,7 +346,7 @@ customer can keep asking follow-up questions.
   `https://cda-demo.vercel.app/api/alexa` back with the wildcard certificate option and save.
   If the URL is right, the Vercel logs show whether Amazon reached us and with what answer.
 - An app on **Alexa+** shows skills under **More → Alexa+ Store → Your Skills → Dev**, and a question
-  must name the skill: *"ask c d a assistant …"*. Typing only a question reaches Amazon's own
+  must name the skill: *"ask appliance helper …"*. Typing only a question reaches Amazon's own
   assistant, not Ellie — the console's "Skill Invocations" panel stays empty when that happens.
 
 ---

@@ -1,7 +1,7 @@
 {
   "interactionModel": {
     "languageModel": {
-      "invocationName": "c. d. a. assistant",
+      "invocationName": "appliance helper",
       "intents": [
         {
           "name": "AskWhyIntent",
