@@ -192,3 +192,14 @@ create table if not exists channel_tokens (
 );
 
 alter table channel_tokens enable row level security;
+
+-- Alexa: Ellie's answer, kept only until the skill reads it out (seconds; anything older than
+-- 15 minutes is deleted). src/lib/alexa.ts
+create table if not exists alexa_replies (
+  message_id      text primary key,               -- alexa|<Amazon request id>
+  conversation_id text,
+  reply           text not null,
+  created_at      timestamptz not null default now()
+);
+
+alter table alexa_replies enable row level security;

@@ -1,0 +1,400 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "c. d. a. assistant",
+      "intents": [
+        {
+          "name": "AskWhyIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "why {question}"
+          ]
+        },
+        {
+          "name": "AskHowIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "how {question}"
+          ]
+        },
+        {
+          "name": "AskWhatIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "what {question}"
+          ]
+        },
+        {
+          "name": "AskWhatsIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "what's {question}"
+          ]
+        },
+        {
+          "name": "AskWhereIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "where {question}"
+          ]
+        },
+        {
+          "name": "AskWhenIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "when {question}"
+          ]
+        },
+        {
+          "name": "AskWhichIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "which {question}"
+          ]
+        },
+        {
+          "name": "AskWhoIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "who {question}"
+          ]
+        },
+        {
+          "name": "AskCanIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "can {question}"
+          ]
+        },
+        {
+          "name": "AskCouldIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "could {question}"
+          ]
+        },
+        {
+          "name": "AskDoIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "do {question}"
+          ]
+        },
+        {
+          "name": "AskDoesIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "does {question}"
+          ]
+        },
+        {
+          "name": "AskDidIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "did {question}"
+          ]
+        },
+        {
+          "name": "AskIsIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "is {question}"
+          ]
+        },
+        {
+          "name": "AskAreIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "are {question}"
+          ]
+        },
+        {
+          "name": "AskWillIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "will {question}"
+          ]
+        },
+        {
+          "name": "AskWouldIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "would {question}"
+          ]
+        },
+        {
+          "name": "AskShouldIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "should {question}"
+          ]
+        },
+        {
+          "name": "AskMyIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "my {question}"
+          ]
+        },
+        {
+          "name": "AskIIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "i {question}"
+          ]
+        },
+        {
+          "name": "AskImIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "i'm {question}"
+          ]
+        },
+        {
+          "name": "AskItIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "it {question}"
+          ]
+        },
+        {
+          "name": "AskItsIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "it's {question}"
+          ]
+        },
+        {
+          "name": "AskTheIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "the {question}"
+          ]
+        },
+        {
+          "name": "AskThereIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "there {question}"
+          ]
+        },
+        {
+          "name": "AskPleaseIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "please {question}"
+          ]
+        },
+        {
+          "name": "AskYesIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "yes {question}"
+          ]
+        },
+        {
+          "name": "AskNoIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "no {question}"
+          ]
+        },
+        {
+          "name": "AskGeneralIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "tell me {question}",
+            "question {question}",
+            "i want to know {question}",
+            "help me with {question}"
+          ]
+        },
+        {
+          "name": "ContinueIntent",
+          "slots": [],
+          "samples": [
+            "continue",
+            "go on",
+            "what did you find",
+            "tell me the answer",
+            "are you there"
+          ]
+        },
+        {
+          "name": "AMAZON.YesIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NoIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        }
+      ],
+      "types": []
+    }
+  }
+}

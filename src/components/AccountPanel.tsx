@@ -8,6 +8,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   telegram: "Telegram",
   instagram: "Instagram",
   messenger: "Messenger",
+  alexa: "Alexa",
   email: "Email",
   website: "This website",
   slack: "Slack",

@@ -11,7 +11,7 @@
 import { elevenLabsConversation } from "./elevenlabs";
 import { supabaseConfigured, supabaseRest as rest } from "./supabase";
 
-export const CHANNELS = ["telegram", "instagram", "messenger", "email", "website", "slack"] as const;
+export const CHANNELS = ["telegram", "instagram", "messenger", "email", "website", "alexa", "slack"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
 export type Customer = { id: string; name: string | null };

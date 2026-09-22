@@ -24,6 +24,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Alexa: Amazon signs every request to /api/alexa, and ElevenLabs signs Ellie's answers to
+  // /api/alexa/reply. Both routes check their signature.
+  if (pathname === "/api/alexa" || pathname.startsWith("/api/alexa/")) return NextResponse.next();
+
   // Aida has its own staff password, separate from this one. Its pages and routes are open here and
   // every route decides for itself: the Aida staff token makes you an employee, a signed room ticket
   // proves you are in the room, and anyone else is a customer.

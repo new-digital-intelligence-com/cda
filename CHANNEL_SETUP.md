@@ -4,7 +4,7 @@ Demo built by **NDI (New Digital Intelligence)** for **CDA** (UK kitchen applian
 Not an official CDA service. Last updated: **21 September 2026**.
 
 > **This repository is public. No secrets in this file.** Keys and tokens live in the tools themselves,
-> in Vercel and in `.env.local` — see [Credentials](#11-credentials).
+> in Vercel and in `.env.local` — see [Credentials](#12-credentials).
 
 ## Contents
 
@@ -13,15 +13,16 @@ Not an official CDA service. Last updated: **21 September 2026**.
 3. [Telegram](#3-telegram)
 4. [Email](#4-email)
 5. [Instagram and Facebook Messenger](#5-instagram-and-facebook-messenger)
-6. [Website](#6-website)
-7. [Customer memory across channels](#7-customer-memory-across-channels)
-8. [Aida rooms](#8-aida-rooms)
-9. [Admin page](#9-admin-page)
-10. [Web app reference](#10-web-app-reference)
-11. [Credentials](#11-credentials)
-12. [Maintenance](#12-maintenance)
-13. [Not built yet](#13-not-built-yet)
-14. [Troubleshooting](#14-troubleshooting)
+6. [Alexa](#6-alexa)
+7. [Website](#7-website)
+8. [Customer memory across channels](#8-customer-memory-across-channels)
+9. [Aida rooms](#9-aida-rooms)
+10. [Admin page](#10-admin-page)
+11. [Web app reference](#11-web-app-reference)
+12. [Credentials](#12-credentials)
+13. [Maintenance](#13-maintenance)
+14. [Not built yet](#14-not-built-yet)
+15. [Troubleshooting](#15-troubleshooting)
 
 ---
 
@@ -39,9 +40,10 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
 | Email **cda_domestic_appliances@new-digital-intelligence.com** | ✅ | Gmail push → web app → Custom Channel "CDA email" |
 | Instagram **@new_digital_intelligence** | ✅ | Meta webhook → web app → Custom Channel "CDA Instagram" |
 | Facebook Messenger, Page **New Digital Intelligence** | ✅ | Meta webhook → web app → Custom Channel "CDA Messenger" |
+| Alexa skill **CDA Assistant** (Echo / Alexa app) | ✅ (development) | Amazon → web app → Custom Channel "CDA Alexa" |
 | Hosted page / QR code | ✅ | ElevenLabs talk-to link (no password) |
-| Slack | ⏳ | Waiting for a Slack workspace (section 13) |
-| WhatsApp, phone number | ⏸ | Parked (section 13) |
+| Slack | ⏳ | Waiting for a Slack workspace (section 14) |
+| WhatsApp, phone number | ⏸ | Parked (section 14) |
 
 ```
  Website chat / voice / files ─────────►┐
@@ -49,6 +51,7 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
  Telegram bot ──────────────────────────►│   ElevenLabs agent "Ellie"
  Email ─► Gmail ─► web app ─────────────►│   Gemini 3.7 Flash · 31 documents (RAG)
  Instagram / Messenger ─► web app ──────►│
+ Alexa (Echo) ─► web app ──────────────►│
  Hosted page / QR ──────────────────────►┘
                                              │ 2 tools + post-call webhook
                                              ▼
@@ -92,10 +95,10 @@ the changed part, then read it back. API changes go live at once; dashboard chan
 **Prompt sections:** Personality · Company context · Environment (channel rules: phone/avatar short
 answers; *Telegram only* text; *Instagram only* plain text under 900 characters; *Website chat* reads
 images and PDFs; *Email only*: body of one plain-text reply, never asks for the email address, answers
-`SKIP` to robots) · Goal · Knowledge rules (only knowledge-base facts; spare parts delivery: give both
+`SKIP` to robots; *Alexa only*: 1–3 short spoken sentences) · Goal · Knowledge rules (only knowledge-base facts; spare parts delivery: give both
 48 h and 3–5 days; warranty: only current 60-day terms) · Collecting details for repairs · Safety (gas
 0800 111 999) · Handover to a human · Style (British English) · Operating mode: AGENT (summary of the
-request, never claims something is booked) · Recognising the customer (section 7).
+request, never claims something is booked) · Recognising the customer (section 8).
 
 ### Knowledge base
 
@@ -187,7 +190,7 @@ and gets Ellie's answer as a normal reply in the same email thread.
 5. **ElevenLabs** → Ellie → Channels → **Custom Channel** → Add trigger → new connection `CDA email` →
    Reply Webhook URL `…/api/email/ellie-reply` → copy the **Inbound URL**, **Inbound Secret** and
    **Outbound Signing Secret**.
-6. **Vercel**: add the email variables (section 10) → Redeploy. **Supabase**: run `supabase/schema.sql`.
+6. **Vercel**: add the email variables (section 11) → Redeploy. **Supabase**: run `supabase/schema.sql`.
 7. **Start the watch once**: `GET https://cda-demo.vercel.app/api/email/gmail-watch` with header
    `Authorization: Bearer <GMAIL_PUSH_SECRET>`. From then on the daily cron keeps it alive.
 8. **Test:** from another address, email "How long is the warranty on a CDA oven?" → a reply arrives
@@ -249,7 +252,7 @@ restricted one before).
 3. Find the account ID: open `https://graph.instagram.com/v25.0/me?fields=user_id,username&access_token=<TOKEN>` → `user_id`.
 4. **ElevenLabs** → Ellie → Channels → **Custom Channel** → Add trigger → new connection `CDA Instagram`
    → Reply Webhook URL `…/api/instagram/reply` → copy Inbound URL, Inbound Secret, Outbound Signing Secret.
-5. **Vercel**: add the `INSTAGRAM_*` variables (section 10) → Redeploy. **Supabase**: run `supabase/schema.sql`.
+5. **Vercel**: add the `INSTAGRAM_*` variables (section 11) → Redeploy. **Supabase**: run `supabase/schema.sql`.
 6. Meta app → **Configure webhooks** → Callback URL and Verify token as in the table → **Verify and save**
    → subscribe **messages**. Then connect the account once:
    `POST https://graph.instagram.com/v25.0/me/subscribed_apps?subscribed_fields=messages&access_token=<TOKEN>`.
@@ -278,7 +281,7 @@ answers in seconds).
    Settings** → **Generate access tokens** → connect the Page → **Generate token**.
 3. **ElevenLabs** → Ellie → Channels → **Custom Channel** → Add trigger → new connection `CDA Messenger`
    → Reply Webhook URL `…/api/messenger/reply` → copy Inbound URL, Inbound Secret, Outbound Signing Secret.
-4. **Vercel**: add the `MESSENGER_*` variables (section 10) → Redeploy. **Supabase**: run `supabase/schema.sql`.
+4. **Vercel**: add the `MESSENGER_*` variables (section 11) → Redeploy. **Supabase**: run `supabase/schema.sql`.
 5. Messenger API Settings → **Configure webhooks** → Callback URL and Verify token as in the table →
    **Verify and save** → next to the Page, **Add subscriptions** → **messages**.
 6. **Test:** from a personal Facebook account, message the Page "How long is the warranty on a CDA
@@ -288,7 +291,59 @@ Good to know: long answers are split into messages of up to 2,000 characters.
 
 ---
 
-## 6. Website
+## 6. Alexa
+
+**What the customer does:** talks to an **Amazon Echo** or the **Alexa app**:
+*"Alexa, ask c d a assistant why my oven shows F3."* Alexa reads Ellie's answer out loud, and the
+customer can keep asking follow-up questions.
+
+**How it works**
+
+```
+1. "Alexa, ask c d a assistant …"          → Amazon → /api/alexa (checks Amazon's signature)
+2. The web app passes the question to Ellie through the "CDA Alexa" Custom Channel
+   (with the marker [Alexa], so she answers in 1–3 short spoken sentences)
+3. Alexa says "One moment" while Ellie thinks
+4. Ellie's answer comes back                → /api/alexa/reply → Alexa reads it out
+```
+
+| Where | Value |
+|---|---|
+| Skill | **CDA Assistant** in the Alexa developer console (developer.amazon.com/alexa/console/ask), ID `amzn1.ask.skill.600a03ff-284b-4e60-a168-8aa279888b9a`, **English (US)** |
+| Invocation name | `c. d. a. assistant` (said "c d a assistant") |
+| Endpoint | HTTPS `https://cda-demo.vercel.app/api/alexa`, certificate option "sub-domain of a domain that has a wildcard certificate" |
+| Words (interaction model) | `alexa/interaction-model.json`, generated from `src/lib/alexaModel.ts` |
+| ElevenLabs | Custom Channel, connection **CDA Alexa**, Reply Webhook URL `https://cda-demo.vercel.app/api/alexa/reply` |
+
+**Set it up from zero**
+1. **developer.amazon.com/alexa/console/ask** → **Create Skill**: name `CDA Assistant`, locale matching
+   the Echo's language, model **Custom**, hosting **Provision your own**, **Start from scratch** → copy
+   the Skill ID.
+2. **ElevenLabs** → Ellie → Channels → **Custom Channel** → Add trigger → new connection `CDA Alexa` →
+   Reply Webhook URL `…/api/alexa/reply` → copy Inbound URL, Inbound Secret, Outbound Signing Secret.
+3. **Vercel**: add the `ALEXA_*` variables (section 11) → Redeploy. **Supabase**: run `supabase/schema.sql`.
+4. Alexa console → **Build → Interaction Model → JSON Editor** → paste `alexa/interaction-model.json`
+   → **Save** → **Build skill**.
+5. **Build → Endpoint** → HTTPS → Default Region `https://cda-demo.vercel.app/api/alexa` → certificate
+   "My development endpoint is a sub-domain of a domain that has a wildcard certificate…" → **Save**.
+6. **Test** tab → set "Skill testing is enabled in" to **Development** → type or say
+   *"ask c d a assistant what is the spare parts phone number"* → Ellie answers **01949 862019**.
+   On an Echo or the Alexa app it works too, if they use the same Amazon account as the developer console.
+
+**Good to know**
+- A question must **start with a question word** (why, how, what, where, can, is, my, I, it's, the…):
+  a classic Alexa skill only hands over free speech after such a word. Answers to Ellie's questions
+  work the same way: *"it's a CDA SK511 oven"*, *"my postcode is …"*, "yes", "no".
+- Alexa waits about 8 seconds. If Ellie needs longer, Alexa says *"say continue to hear the answer"*.
+- Alexa speaks in **its own voice** (not Shelley), in **English** only.
+- The same Alexa account is recognised between conversations (customer memory, channel `alexa`).
+  Linking it to a CDA account with a code is not possible by voice.
+- For the demo the skill stays in **Development** (your own Amazon account only). Publishing it for
+  everyone needs Amazon's certification.
+
+---
+
+## 7. Website
 
 **What the customer does:** opens https://cda-demo.vercel.app, types the **site password**, and uses
 one of four tabs. The website talks to Ellie directly through ElevenLabs' SDK.
@@ -303,9 +358,9 @@ one of four tabs. The website talks to Ellie directly through ElevenLabs' SDK.
 both tabs) sets the language Ellie starts in. During the call there is no button: just speak the other
 language, or ask her to switch, and she follows (ElevenLabs' language detection). Shelley's voice either way. Text
 channels need no switch: Ellie answers in the language the customer writes in.
-| 📞 **Aida** | A live call with CDA staff: join with a code or open a room (section 8) |
+| 📞 **Aida** | A live call with CDA staff: join with a code or open a room (section 9) |
 
-Also on the page: **Your CDA account** (link channels with a code, section 7), buttons that open
+Also on the page: **Your CDA account** (link channels with a code, section 8), buttons that open
 Email, Telegram, Instagram and Messenger, and **Email me this conversation** under chat, voice and
 avatar (one click for a signed-in customer). The staff page `/admin` is not linked from here.
 
@@ -341,7 +396,7 @@ chat bubble to any website:
 
 ---
 
-## 7. Customer memory across channels
+## 8. Customer memory across channels
 
 Ellie recognises the same person on every channel and remembers what they asked. **She never asks
 anyone to identify themselves**; someone she cannot place is simply helped.
@@ -366,6 +421,7 @@ Conversation ends → post-call webhook → one short note (max 400 characters)
 | Email | The web app registers the conversation to the sender when it hands the email to Ellie; `customer_lookup` waits up to ~1 s for that. Old Freshdesk conversations: `…_fd_<ticket>` |
 | Website | Registered when the session starts: signed-in account, else the `cda_visitor` cookie |
 | Instagram, Messenger | The web app registers the conversation to the sender and keeps it in `instagram_threads` / `messenger_threads` |
+| Alexa | The web app registers the conversation to the Alexa account (a short hash of Amazon's user id) |
 | Slack | Not wired up (`integration__slack_user_id` exists) |
 
 > **Never bind a tool parameter to a channel-specific dynamic variable, and never give an
@@ -386,7 +442,7 @@ no policies: only the service role key reads it. **Use fake customers only** (UK
 
 ---
 
-## 8. Aida rooms
+## 9. Aida rooms
 
 A live call between CDA staff and a customer: everyone can **talk or type**, the call is
 **transcribed live**, and **Aida** drafts a reply to each customer message that **only staff see**
@@ -425,14 +481,14 @@ Costs: LiveKit Cloud free "Build" plan (5,000 participant-minutes a month; proje
 
 ---
 
-## 9. Admin page
+## 10. Admin page
 
 `https://cda-demo.vercel.app/admin` — staff only, **Aida staff password** (the site password does not
 open it; `/aida` forwards here). Three tabs, which stay open once visited so a call is never dropped:
 
 | Tab | What staff do |
 |---|---|
-| 📞 **Aida rooms** | Create, join, close rooms; read and email closed ones (section 8) |
+| 📞 **Aida rooms** | Create, join, close rooms; read and email closed ones (section 9) |
 | 👥 **Customers** | Numbers (customers, accounts, 2+ channels, active this week / now, conversations per channel, email outcomes, open rooms); a searchable list; one customer's channels (✓ verified), activity and timeline |
 | ✉️ **Email** | Send automatically / Draft for staff, and the latest emails with what happened to each |
 
@@ -448,7 +504,7 @@ characters are shown.
 
 ---
 
-## 10. Web app reference
+## 11. Web app reference
 
 | Item | Value |
 |---|---|
@@ -470,12 +526,14 @@ characters are shown.
 | `/api/email/gmail-watch` | By hand, to restart the Gmail watch | `Bearer CRON_SECRET` or the push secret |
 | `/api/instagram/webhook`, `/api/messenger/webhook` | Meta | `?token=` `INSTAGRAM_WEBHOOK_SECRET` / `MESSENGER_WEBHOOK_SECRET` (+ Meta signature if `META_APP_SECRET` is set) |
 | `/api/instagram/reply`, `/api/messenger/reply` | ElevenLabs (replies) | HMAC signature (`INSTAGRAM_CHANNEL_SIGNING_SECRET` / `MESSENGER_CHANNEL_SIGNING_SECRET`) |
+| `/api/alexa` | Amazon (Alexa skill) | Amazon's request signature + our skill ID |
+| `/api/alexa/reply` | ElevenLabs (Alexa answers) | HMAC signature (`ALEXA_CHANNEL_SIGNING_SECRET`) |
 | `/api/email/mode`, `/api/admin/*` | `/admin` | Aida staff token |
 | `/api/aida/*` | Aida rooms | Staff token, room ticket, or nothing for customers (each route checks) |
 | `/api/elevenlabs/*`, `/api/anam/session`, `/api/account`, `/api/transcript/email` | Customer site | Site password |
 
 **Main files**: `src/components/AssistantApp.tsx` (tabs) · `src/lib/customers.ts` (memory) ·
-`src/lib/emailInbox.ts`, `gmail.ts`, `emailParse.ts`, `emailMode.ts` (email) · `src/lib/metaChat.ts`, `instagram.ts`, `messenger.ts` (Instagram, Messenger) · `src/lib/aida.ts`,
+`src/lib/emailInbox.ts`, `gmail.ts`, `emailParse.ts`, `emailMode.ts` (email) · `src/lib/metaChat.ts`, `instagram.ts`, `messenger.ts` (Instagram, Messenger) · `src/lib/alexa.ts`, `alexaModel.ts`, `alexa/interaction-model.json` (Alexa) · `src/lib/aida.ts`,
 `livekit.ts`, `src/components/aida/` (rooms) · `src/components/admin/`, `src/lib/adminData.ts`,
 `anthropic.ts` (admin) · `supabase/schema.sql` · `vercel.json` (cron).
 
@@ -501,13 +559,15 @@ characters are shown.
 | `MESSENGER_PAGE_TOKEN`, `MESSENGER_PAGE_ID` | Messenger: the Page token and Page ID |
 | `MESSENGER_WEBHOOK_SECRET` | Secret in the Meta Callback URL, also the Verify token |
 | `MESSENGER_CHANNEL_INBOUND_URL`, `MESSENGER_CHANNEL_INBOUND_SECRET`, `MESSENGER_CHANNEL_SIGNING_SECRET` | "CDA Messenger" Custom Channel |
+| `ALEXA_SKILL_ID` | The Alexa skill's ID (requests for any other skill are refused) |
+| `ALEXA_CHANNEL_INBOUND_URL`, `ALEXA_CHANNEL_INBOUND_SECRET`, `ALEXA_CHANNEL_SIGNING_SECRET` | "CDA Alexa" Custom Channel |
 | `META_APP_SECRET` (optional) | Also check Meta's signature on Instagram and Messenger webhooks |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Insights on `/admin` |
 | `FRESHDESK_API_KEY`, `FRESHDESK_SUBDOMAIN` | Only to recognise old Freshdesk conversations; can go once Freshdesk is closed |
 
 ---
 
-## 11. Credentials
+## 12. Credentials
 
 | Credential | Lives in | Note |
 |---|---|---|
@@ -523,7 +583,7 @@ token, Messenger Page token, Anthropic, Freshdesk; delete the Make API token.
 
 ---
 
-## 12. Maintenance
+## 13. Maintenance
 
 | When | What |
 |---|---|
@@ -533,11 +593,11 @@ token, Messenger Page token, Anthropic, Freshdesk; delete the Make API token.
 | Monthly | Anam gives 30 avatar minutes |
 | After 20 Dec 2026, if Messenger stops | Generate the Page token again in the Meta app and update `MESSENGER_PAGE_TOKEN` |
 | When CDA content changes | Replace the PDFs in Drive (auto sync) |
-| After the demo | Rotate the keys listed in section 11 |
+| After the demo | Rotate the keys listed in section 12 |
 
 ---
 
-## 13. Not built yet
+## 14. Not built yet
 
 | What | Status | Needed |
 |---|---|---|
@@ -566,11 +626,11 @@ token, Messenger Page token, Anthropic, Freshdesk; delete the Make API token.
 
 ---
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| A channel breaks with "Missing required dynamic variables", or Telegram stops answering | A tool bound to a channel variable, or an `integration__` placeholder: remove it (section 7) |
+| A channel breaks with "Missing required dynamic variables", or Telegram stops answering | A tool bound to a channel variable, or an `integration__` placeholder: remove it (section 8) |
 | Dashboard test works, channel doesn't | The change is still a draft → **Publish** |
 | Documents synced but unknown to Ellie | Attach them to the agent and publish |
 | "RAG storage limit exceeded" / "exceeds your quota" | Too many documents / credits used up |

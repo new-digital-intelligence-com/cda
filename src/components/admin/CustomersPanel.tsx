@@ -59,6 +59,7 @@ const CHANNEL_STYLE: Record<string, { icon: string; label: string; className: st
   telegram: { icon: "✈", label: "Telegram", className: "bg-sky-50 text-sky-800" },
   instagram: { icon: "◎", label: "Instagram", className: "bg-pink-50 text-pink-800" },
   messenger: { icon: "ⓜ", label: "Messenger", className: "bg-blue-50 text-blue-800" },
+  alexa: { icon: "◉", label: "Alexa", className: "bg-cyan-50 text-cyan-800" },
   website: { icon: "🌐", label: "Website", className: "bg-cda-grey text-cda-dark" },
   slack: { icon: "#", label: "Slack", className: "bg-purple-50 text-purple-800" },
 };
