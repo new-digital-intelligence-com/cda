@@ -340,6 +340,390 @@
           ]
         },
         {
+          "name": "AskTellIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "tell {question}"
+          ]
+        },
+        {
+          "name": "AskExplainIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "explain {question}"
+          ]
+        },
+        {
+          "name": "AskAboutIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "about {question}"
+          ]
+        },
+        {
+          "name": "AskNeedIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "need {question}"
+          ]
+        },
+        {
+          "name": "AskWantIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "want {question}"
+          ]
+        },
+        {
+          "name": "AskGiveIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "give {question}"
+          ]
+        },
+        {
+          "name": "AskSendIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "send {question}"
+          ]
+        },
+        {
+          "name": "AskShowIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "show {question}"
+          ]
+        },
+        {
+          "name": "AskWeIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "we {question}"
+          ]
+        },
+        {
+          "name": "AskYouIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "you {question}"
+          ]
+        },
+        {
+          "name": "AskYourIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "your {question}"
+          ]
+        },
+        {
+          "name": "AskHeIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "he {question}"
+          ]
+        },
+        {
+          "name": "AskSheIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "she {question}"
+          ]
+        },
+        {
+          "name": "AskTheyIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "they {question}"
+          ]
+        },
+        {
+          "name": "AskWasIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "was {question}"
+          ]
+        },
+        {
+          "name": "AskAmIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "am {question}"
+          ]
+        },
+        {
+          "name": "AskOvenIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "oven {question}"
+          ]
+        },
+        {
+          "name": "AskHobIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "hob {question}"
+          ]
+        },
+        {
+          "name": "AskDishwasherIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "dishwasher {question}"
+          ]
+        },
+        {
+          "name": "AskFridgeIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "fridge {question}"
+          ]
+        },
+        {
+          "name": "AskFreezerIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "freezer {question}"
+          ]
+        },
+        {
+          "name": "AskWashingIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "washing {question}"
+          ]
+        },
+        {
+          "name": "AskDryerIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "dryer {question}"
+          ]
+        },
+        {
+          "name": "AskExtractorIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "extractor {question}"
+          ]
+        },
+        {
+          "name": "AskMicrowaveIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "microwave {question}"
+          ]
+        },
+        {
+          "name": "AskWarrantyIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "warranty {question}"
+          ]
+        },
+        {
+          "name": "AskPartsIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "parts {question}"
+          ]
+        },
+        {
+          "name": "AskSpareIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "spare {question}"
+          ]
+        },
+        {
+          "name": "AskDeliveryIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "delivery {question}"
+          ]
+        },
+        {
+          "name": "AskEngineerIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "engineer {question}"
+          ]
+        },
+        {
+          "name": "AskOrderIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "order {question}"
+          ]
+        },
+        {
+          "name": "AskRegisterIntent",
+          "slots": [
+            {
+              "name": "question",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "register {question}"
+          ]
+        },
+        {
           "name": "AskGeneralIntent",
           "slots": [
             {
