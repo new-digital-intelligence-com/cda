@@ -87,7 +87,7 @@ export function AidaHistory({ code, staffToken, onBack }: { code: string; staffT
       </header>
 
       <div className={isStaff ? "grid gap-4 lg:grid-cols-[1fr_340px]" : "grid"}>
-        <section className="space-y-3 rounded-xl bg-cda-grey-light p-4 shadow-sm">
+        <section className="min-h-[60dvh] space-y-3 rounded-xl bg-cda-grey-light p-4 shadow-sm">
           {lines.length === 0 ? (
             <p className="text-center text-sm text-cda-text">Nothing was said or typed in this room.</p>
           ) : (

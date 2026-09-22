@@ -186,8 +186,8 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
     feedCopilot(ticket.name, ticket.role, text);
   };
 
-  const applyApproved = (suggestionId: string, text: string, byName: string) => {
-    addLine({ id: `a-${suggestionId}`, kind: "approved", name: "CDA Support", role: "employee", text, approvedBy: byName });
+  const applyApproved = (suggestionId: string, text: string, byName: string, mine = false) => {
+    addLine({ id: `a-${suggestionId}`, kind: "approved", name: byName, role: "employee", text, approvedBy: byName, mine });
     setSuggestions((current) =>
       current.map((s) => (s.id === suggestionId ? { ...s, status: "approved", decidedBy: byName } : s)),
     );
@@ -500,7 +500,7 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
     const text = raw.replace(STAFF_NOTE, "").trim();
     if (!text) return;
     setEditing((current) => without(current, suggestion.id));
-    applyApproved(suggestion.id, text, ticket.name);
+    applyApproved(suggestion.id, text, ticket.name, true);
     send({ type: "approved", suggestionId: suggestion.id, text });
     save("approved", text, suggestion.id);
   }
@@ -628,8 +628,8 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
       )}
 
       <div className={isEmployee ? "grid gap-4 lg:grid-cols-[1fr_380px]" : "grid"}>
-        <section className="flex min-h-[520px] flex-col overflow-hidden rounded-xl bg-white shadow-sm">
-          <div className="flex-1 space-y-3 overflow-y-auto bg-cda-grey-light p-4 lg:max-h-[60dvh]">
+        <section className="flex h-[72dvh] min-h-[520px] flex-col overflow-hidden rounded-xl bg-white shadow-sm">
+          <div className="flex-1 space-y-3 overflow-y-auto bg-cda-grey-light p-4">
             {lines.length === 0 && (
               <p className="text-center text-sm text-cda-text">Say hello, or type a message below.</p>
             )}
@@ -775,18 +775,13 @@ export function LineView({ line }: { line: TimelineLine }) {
   if (line.kind === "system") {
     return <p className="text-center text-xs text-cda-text">{line.text}</p>;
   }
-  if (line.kind === "approved") {
-    // An approved draft is the staff member's own answer, so it carries their name like anything
-    // else they send. The red outline is only there to remind staff that Aida wrote it first.
-    return (
-      <div className="max-w-[85%] rounded-2xl border border-cda-red/50 bg-white px-4 py-2 shadow-sm">
-        <p className="text-xs font-semibold text-cda-red">
-          {line.approvedBy || "CDA Support"} · CDA
-        </p>
-        <p className="mt-0.5 whitespace-pre-wrap text-sm text-cda-dark">{line.text}</p>
-      </div>
-    );
-  }
+  // An approved draft is the staff member's own answer: same bubble, same side, their name on it.
+  // Where the words came from is between Aida and the staff, and it stays in the drafts panel.
+  const who = line.mine
+    ? "You"
+    : line.kind === "approved"
+      ? line.approvedBy || "CDA Support"
+      : line.name;
   return (
     <div className={`flex ${line.mine ? "justify-end" : "justify-start"}`}>
       <div
@@ -794,7 +789,7 @@ export function LineView({ line }: { line: TimelineLine }) {
       >
         {/* Spoken or typed makes no difference to the reader: a message is a message. */}
         <p className={`text-xs font-semibold ${line.mine ? "text-white/70" : "text-cda-text"}`}>
-          {line.mine ? "You" : line.name} · {line.role === "employee" ? "CDA" : "customer"}
+          {who} · {line.role === "employee" ? "CDA" : "customer"}
         </p>
         <p className="mt-0.5 whitespace-pre-wrap text-sm">{line.text}</p>
       </div>
@@ -851,7 +846,15 @@ export function historyToState(events: HistoryEvent[], myIdentity: string) {
     } else if (event.kind === "suggestion" && event.ref) {
       suggestions.set(event.ref, { id: event.ref, text: event.text ?? "", replyTo: "the customer", status: "pending" });
     } else if (event.kind === "approved" && event.ref) {
-      lines.push({ id: `a-${event.ref}`, kind: "approved", name: "CDA Support", role: "employee", text: event.text ?? "", approvedBy: name });
+      lines.push({
+        id: `a-${event.ref}`,
+        kind: "approved",
+        name,
+        role: "employee",
+        text: event.text ?? "",
+        approvedBy: name,
+        mine: event.author_identity === myIdentity,
+      });
       const suggestion = suggestions.get(event.ref);
       if (suggestion) Object.assign(suggestion, { status: "approved", decidedBy: name });
     } else if (event.kind === "declined" && event.ref) {
