@@ -628,13 +628,13 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
       )}
 
       <div className={isEmployee ? "grid gap-4 lg:grid-cols-[1fr_380px]" : "grid"}>
-        <section className="flex h-[72dvh] min-h-[520px] flex-col overflow-hidden rounded-xl bg-white shadow-sm">
+        <section className="flex h-[78dvh] min-h-[520px] flex-col overflow-hidden rounded-xl bg-white shadow-sm">
           <div className="flex-1 space-y-3 overflow-y-auto bg-cda-grey-light p-4">
             {lines.length === 0 && (
               <p className="text-center text-sm text-cda-text">Say hello, or type a message below.</p>
             )}
             {lines.map((line) => (
-              <LineView key={line.id} line={line} />
+              <LineView key={line.id} line={line} viewerRole={ticket.role} />
             ))}
             {scribe.partialTranscript && (
               <p className="text-right text-sm italic text-cda-text">{scribe.partialTranscript}…</p>
@@ -771,7 +771,7 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
   );
 }
 
-export function LineView({ line }: { line: TimelineLine }) {
+export function LineView({ line, viewerRole }: { line: TimelineLine; viewerRole: AidaRole }) {
   if (line.kind === "system") {
     return <p className="text-center text-xs text-cda-text">{line.text}</p>;
   }
@@ -782,13 +782,16 @@ export function LineView({ line }: { line: TimelineLine }) {
     : line.kind === "approved"
       ? line.approvedBy || "CDA Support"
       : line.name;
+  // My side of the conversation is on the right, the other side on the left, as in any chat app:
+  // staff see CDA on the right, a customer sees their own messages there.
+  const mySide = line.role === viewerRole;
   return (
-    <div className={`flex ${line.mine ? "justify-end" : "justify-start"}`}>
+    <div className={`flex ${mySide ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2 shadow-sm ${line.mine ? "bg-cda-dark text-white" : "bg-white text-cda-dark"}`}
+        className={`max-w-[75%] rounded-2xl px-4 py-2 shadow-sm ${mySide ? "bg-cda-dark text-white" : "bg-white text-cda-dark"}`}
       >
         {/* Spoken or typed makes no difference to the reader: a message is a message. */}
-        <p className={`text-xs font-semibold ${line.mine ? "text-white/70" : "text-cda-text"}`}>
+        <p className={`text-xs font-semibold ${mySide ? "text-white/70" : "text-cda-text"}`}>
           {who} · {line.role === "employee" ? "CDA" : "customer"}
         </p>
         <p className="mt-0.5 whitespace-pre-wrap text-sm">{line.text}</p>

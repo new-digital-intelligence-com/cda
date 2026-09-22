@@ -65,7 +65,7 @@ export function AidaHistory({ code, staffToken, onBack }: { code: string; staffT
   const { lines, suggestions } = historyToState(events, "");
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
       <header className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-white p-4 shadow-sm">
         <div>
           <h1 className="text-lg font-bold text-cda-dark">{room.title ?? "Aida room"}</h1>
@@ -87,11 +87,11 @@ export function AidaHistory({ code, staffToken, onBack }: { code: string; staffT
       </header>
 
       <div className={isStaff ? "grid gap-4 lg:grid-cols-[1fr_340px]" : "grid"}>
-        <section className="min-h-[60dvh] space-y-3 rounded-xl bg-cda-grey-light p-4 shadow-sm">
+        <section className="min-h-[70dvh] space-y-3 rounded-xl bg-cda-grey-light p-4 shadow-sm">
           {lines.length === 0 ? (
             <p className="text-center text-sm text-cda-text">Nothing was said or typed in this room.</p>
           ) : (
-            lines.map((line) => <LineView key={line.id} line={line} />)
+            lines.map((line) => <LineView key={line.id} line={line} viewerRole={isStaff ? "employee" : "customer"} />)
           )}
         </section>
 
