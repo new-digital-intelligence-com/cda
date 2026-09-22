@@ -462,7 +462,17 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
     const room = roomRef.current;
     if (!room) return;
     const next = !muted;
-    await room.localParticipant.setMicrophoneEnabled(!next).catch(() => {});
+    // Unmuting asks the browser for the microphone again: someone who allowed it, or closed the
+    // app that was holding it, gets their voice back without reloading the page.
+    let failed = false;
+    await room.localParticipant.setMicrophoneEnabled(!next).catch(() => {
+      failed = true;
+    });
+    if (failed && !next) {
+      setNotice("Your microphone is still not available. Allow it in the browser, then try again.");
+      return;
+    }
+    if (!next) setNotice(null);
     setMuted(next);
   }
 
