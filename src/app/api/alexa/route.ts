@@ -44,12 +44,15 @@ export async function POST(request: Request) {
   if (intent === "AMAZON.StopIntent" || intent === "AMAZON.CancelIntent") return Response.json(say("Goodbye.", {}, true));
   if (intent === "AMAZON.HelpIntent" || intent === "AMAZON.NavigateHomeIntent") return Response.json(say(HELP, session));
 
-  // An answer that took longer than Alexa waits: read it out now.
-  if (intent === CONTINUE_INTENT) {
-    if (!session.pendingMessageId) return Response.json(say("There's nothing waiting. What would you like to ask?", session));
+  // An answer that took longer than Alexa waits is read out at the next word, whatever that word
+  // is: nobody should have to remember a magic one. "Continue" still works, and so does anything
+  // else the customer says.
+  if (session.pendingMessageId) {
     const answer = await waitForAnswer(session.pendingMessageId, deadlineFrom(start, body));
     if (answer) return Response.json(say(answer, { conversationId: session.conversationId }));
-    return Response.json(say("I'm still checking. Say continue in a moment.", session));
+    if (intent === CONTINUE_INTENT) return Response.json(say("Still checking. Speak again in a second.", session));
+  } else if (intent === CONTINUE_INTENT) {
+    return Response.json(say("There's nothing waiting. What would you like to ask?", session));
   }
 
   let text = "";
@@ -74,7 +77,7 @@ export async function POST(request: Request) {
   const answer = await waitForAnswer(asked.messageId, deadlineFrom(start, body));
   if (answer) return Response.json(say(answer, { conversationId: asked.conversationId }));
   return Response.json(
-    say("I'm still looking that up. Say continue to hear the answer.", {
+    say("One second, I'm looking that up. Just say anything and I'll tell you.", {
       conversationId: asked.conversationId,
       pendingMessageId: asked.messageId,
     }),
