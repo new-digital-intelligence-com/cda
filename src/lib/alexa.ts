@@ -1,6 +1,6 @@
 // The Alexa skill "CDA Assistant": a customer talks to Ellie through an Echo or the Alexa app.
 //
-//   "Alexa, ask appliance helper why my oven shows F3"
+//   "Alexa, ask cda assistant why my oven shows F3"
 //     → Amazon → /api/alexa → Ellie through her "CDA Alexa" Custom Channel
 //     → Ellie's answer → /api/alexa/reply (stored for a moment) → /api/alexa reads it out
 //

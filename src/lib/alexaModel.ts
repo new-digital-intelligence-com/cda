@@ -6,7 +6,7 @@
 // word, so there is one intent per opening word. The route puts that word back in front of what
 // was said, so Ellie hears the whole question: "why my oven shows F3", not "my oven shows F3".
 
-export const INVOCATION_NAME = "appliance helper";
+export const INVOCATION_NAME = "cda assistant";
 
 /** Opening word(s) → the words put back in front of the question for Ellie. */
 export const QUESTION_INTENTS: { intent: string; samples: string[]; prefix: string }[] = [
