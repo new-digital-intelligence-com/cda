@@ -781,7 +781,7 @@ export function LineView({ line }: { line: TimelineLine }) {
     return (
       <div className="max-w-[85%] rounded-2xl border border-cda-red/50 bg-white px-4 py-2 shadow-sm">
         <p className="text-xs font-semibold text-cda-red">
-          <span aria-label="typed">⌨</span> {line.approvedBy || "CDA Support"} · CDA
+          {line.approvedBy || "CDA Support"} · CDA
         </p>
         <p className="mt-0.5 whitespace-pre-wrap text-sm text-cda-dark">{line.text}</p>
       </div>
@@ -792,8 +792,8 @@ export function LineView({ line }: { line: TimelineLine }) {
       <div
         className={`max-w-[85%] rounded-2xl px-4 py-2 shadow-sm ${line.mine ? "bg-cda-dark text-white" : "bg-white text-cda-dark"}`}
       >
+        {/* Spoken or typed makes no difference to the reader: a message is a message. */}
         <p className={`text-xs font-semibold ${line.mine ? "text-white/70" : "text-cda-text"}`}>
-          <span aria-label={line.kind === "speech" ? "spoken" : "typed"}>{line.kind === "speech" ? "🎙" : "⌨"}</span>{" "}
           {line.mine ? "You" : line.name} · {line.role === "employee" ? "CDA" : "customer"}
         </p>
         <p className="mt-0.5 whitespace-pre-wrap text-sm">{line.text}</p>
