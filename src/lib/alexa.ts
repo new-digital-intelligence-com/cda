@@ -20,8 +20,8 @@ const q = encodeURIComponent;
  * the request, not from the moment this route woke up: a cold start can eat a second before any of
  * our code runs, and Alexa's clock is the one that decides.
  */
-const ANSWER_DEADLINE_MS = 6_600;
-const POLL_MS = 300;
+const ANSWER_DEADLINE_MS = 7_000;
+const POLL_MS = 180;
 /** Amazon rejects requests whose timestamp is older than this. */
 const MAX_REQUEST_AGE_MS = 150_000;
 export const MESSAGE_ID_PREFIX = "alexa|";
@@ -196,8 +196,10 @@ function speakerKey(body: AlexaRequest): string {
 export async function askEllie(body: AlexaRequest, text: string): Promise<{ conversationId: string; messageId: string }> {
   const messageId = `${MESSAGE_ID_PREFIX}${body.request?.requestId ?? crypto.randomUUID()}`;
   const speaker = speakerKey(body);
-  const customer = await customerForChannel({ channel: "alexa", key: speaker }, false).catch(() => null);
   const previous = body.session?.attributes?.conversationId;
+  // Every millisecond counts against Alexa's 8 seconds, so who is speaking is looked up beside the
+  // question rather than before it.
+  const customer = customerForChannel({ channel: "alexa", key: speaker }, false).catch(() => null);
 
   let conversationId: string;
   try {
@@ -206,7 +208,7 @@ export async function askEllie(body: AlexaRequest, text: string): Promise<{ conv
     if (!previous) throw error;
     conversationId = await sendToEllie(text, messageId, speaker, undefined);
   }
-  if (customer) await rememberConversation(conversationId, customer.id, "alexa").catch(() => {});
+  void customer.then((known) => (known ? rememberConversation(conversationId, known.id, "alexa") : null)).catch(() => {});
   return { conversationId, messageId };
 }
 
