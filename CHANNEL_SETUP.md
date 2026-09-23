@@ -120,6 +120,10 @@ customers (outbound calls from the staff call list, section 10).
   cooling/dishwashers/laundry, sinks and taps) · discontinued models · 61 contradictions on CDA's
   own website. Fact-checked against the live site 16–17 Sep 2026 (251 products)
 
+Plus **"CDA approved FAQ"**: answers staff approved on `/admin` → 📚 Knowledge, managed by the web
+app (usage mode *prompt*, always in context; section 10). Don't edit or attach it by hand: it is
+rebuilt on every approval.
+
 To update: replace the PDF in Drive (it re-syncs) and it stays attached. Rules: never "crawl entire
 website" (1,000+ old pages, storage full); a synced document must also be **attached** to the agent;
 Google Sheets/Slides are not supported by the Drive sync.
@@ -526,13 +530,14 @@ Costs: LiveKit Cloud free "Build" plan (5,000 participant-minutes a month; proje
 ## 10. Admin page
 
 `https://cda-demo.vercel.app/admin` — staff only, **Aida staff password** (the site password does not
-open it; `/aida` forwards here). Four tabs, which stay open once visited so a call is never dropped:
+open it; `/aida` forwards here). Five tabs, which stay open once visited so a call is never dropped:
 
 | Tab | What staff do |
 |---|---|
 | 📞 **Aida rooms** | Create, join, close rooms; read and email closed ones (section 9) |
 | 👥 **Customers** | Numbers (customers, accounts, 2+ channels, active this week / now, conversations per channel, email outcomes, open rooms); a searchable list; one customer's channels (✓ verified), activity and timeline |
 | 📲 **Call list** | Phone numbers, each with instructions for Ellie; **Start calling** and she phones them one by one (below) |
+| 📚 **Knowledge** | Questions Ellie could not answer, on every channel; staff write and approve the answer and Ellie uses it from her next conversation (below) |
 | ✉️ **Email** | Send automatically / Draft for staff, and the latest emails with what happened to each |
 
 **AI insights** (Claude Haiku, `ANTHROPIC_MODEL=claude-haiku-4-5`, only when a staff member clicks,
@@ -544,6 +549,27 @@ nothing stored, a fraction of a cent each):
 Customer notes and transcripts are sent to Anthropic for these insights (fine for the demo; for real
 customers it belongs in the privacy notice). Website "channels" are browser cookies, so only 6
 characters are shown.
+
+### Knowledge (Ellie learns from what she could not answer)
+
+After every conversation, ElevenLabs' post-call analysis fills Ellie's data collection item
+**`unanswered_question`**: the questions she could not answer from her knowledge (in English, no
+personal details, several separated by `|`, empty when everything was answered; passing a request on,
+like booking an engineer, does not count). The post-call webhook stores them in `knowledge_gaps`
+with the channel.
+
+On the **📚 Knowledge** tab:
+- **✨ Group and suggest answers**: Claude Haiku merges questions that ask the same thing (*asked 3 times
+  · Website, Email*) and suggests wording. It never invents CDA facts: it writes **[check: …]** where
+  one is needed, and an answer still holding one cannot be approved
+- **Approve and teach Ellie** → `knowledge_faq` → the document **"CDA approved FAQ"** is rebuilt and
+  swapped in on Ellie (ElevenLabs API: new text document, the agent's list gets it in place of the old
+  one, old one deleted; her other 31 documents are left exactly as they are). Usage mode **prompt**:
+  always in her context, so the answer works in her very next conversation, with no indexing wait
+- **Dismiss** for questions not worth an answer; **Edit / Delete** approved answers; **+ Add an answer
+  yourself** without a question behind it. Every change republishes at once
+
+Nothing reaches Ellie without a staff member approving it (`src/lib/knowledge.ts`).
 
 ### Call list (Ellie phones customers)
 

@@ -242,3 +242,45 @@ create index if not exists call_list_items_conversation_idx on call_list_items (
 
 alter table call_lists      enable row level security;
 alter table call_list_items enable row level security;
+
+-- ---------------------------------------------------------------------------------------------
+-- Knowledge gaps: questions Ellie could not answer (ElevenLabs' post-call data collection item
+-- "unanswered_question", on every channel), and the answers CDA staff approve for them on /admin.
+-- Approved answers are published to Ellie's knowledge as one document, "CDA approved FAQ"
+-- (src/lib/knowledge.ts). Nothing reaches Ellie without a staff member approving it.
+-- ---------------------------------------------------------------------------------------------
+
+create table if not exists knowledge_gaps (
+  id              bigint generated always as identity primary key,
+  conversation_id text,
+  channel         text,
+  question        text not null,
+  status          text not null default 'open',   -- open | answered | dismissed
+  faq_id          bigint,                          -- the approved answer that covers it
+  created_at      timestamptz not null default now()
+);
+
+-- A repeated webhook for the same conversation stores its questions once.
+create unique index if not exists knowledge_gaps_once_idx on knowledge_gaps (conversation_id, question);
+create index if not exists knowledge_gaps_status_idx on knowledge_gaps (status, created_at desc);
+
+create table if not exists knowledge_faq (
+  id          bigint generated always as identity primary key,
+  question    text not null,
+  answer      text not null,
+  approved_by text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+-- The document as last published to ElevenLabs. A single row.
+create table if not exists knowledge_publish (
+  id           int primary key default 1 check (id = 1),
+  document_id  text,
+  entries      int not null default 0,
+  published_at timestamptz
+);
+
+alter table knowledge_gaps    enable row level security;
+alter table knowledge_faq     enable row level security;
+alter table knowledge_publish enable row level security;

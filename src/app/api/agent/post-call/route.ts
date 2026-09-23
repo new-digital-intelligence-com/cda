@@ -1,5 +1,6 @@
 import { hasValidWebhookSignature } from "@/lib/agentAuth";
 import { addNote } from "@/lib/customers";
+import { recordGaps } from "@/lib/knowledge";
 import { callEnded } from "@/lib/outboundCalls";
 
 /** Notes are a reminder, not a transcript: one short line is enough for the next conversation. */
@@ -15,7 +16,15 @@ export async function POST(request: Request) {
 
   let event: {
     type?: string;
-    data?: { conversation_id?: string; failure_reason?: string; analysis?: { transcript_summary?: string } };
+    data?: {
+      conversation_id?: string;
+      failure_reason?: string;
+      metadata?: { phone_call?: unknown };
+      analysis?: {
+        transcript_summary?: string;
+        data_collection_results?: Record<string, { value?: unknown } | undefined>;
+      };
+    };
   };
   try {
     event = JSON.parse(rawBody);
@@ -32,6 +41,15 @@ export async function POST(request: Request) {
 
   // Only the transcription event carries a summary; other event types are acknowledged and dropped.
   if (event.type !== "post_call_transcription") return Response.json({ ok: true, ignored: event.type });
+
+  // Questions Ellie could not answer (her "unanswered_question" analysis item) wait on /admin for
+  // staff to write the answer. Never fatal: the note below matters more.
+  const unanswered = event.data?.analysis?.data_collection_results?.unanswered_question?.value;
+  if (event.data?.conversation_id && unanswered) {
+    await recordGaps(event.data.conversation_id, unanswered, Boolean(event.data.metadata?.phone_call)).catch((error) =>
+      console.error("knowledge gap could not be stored", error),
+    );
+  }
 
   const conversationId = event.data?.conversation_id;
   const summary = event.data?.analysis?.transcript_summary?.trim();
