@@ -8,7 +8,17 @@ export function anthropicConfigured(): boolean {
 }
 
 /** One question, one answer. Returns Claude's text. */
-export async function askClaude({ system, prompt, maxTokens = 900 }: { system: string; prompt: string; maxTokens?: number }): Promise<string> {
+export async function askClaude({
+  system,
+  prompt,
+  maxTokens = 900,
+  timeoutMs = 45_000,
+}: {
+  system: string;
+  prompt: string;
+  maxTokens?: number;
+  timeoutMs?: number;
+}): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY must be set");
   const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -22,7 +32,7 @@ export async function askClaude({ system, prompt, maxTokens = 900 }: { system: s
       messages: [{ role: "user", content: prompt }],
     }),
     cache: "no-store",
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const body = (await response.json().catch(() => ({}))) as {
     content?: { type: string; text?: string }[];

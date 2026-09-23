@@ -34,6 +34,8 @@ export type ConversationRecord = {
     text_only?: boolean;
     /** Set for conversations started by a channel trigger, e.g. external_system "custom_channel". */
     async_metadata?: { external_system?: string | null; external_id?: string | null } | null;
+    /** Phone calls: external_number is the customer's own number, whichever side dialled. */
+    phone_call?: { direction?: "inbound" | "outbound" | string; external_number?: string | null } | null;
   };
   /** What the channel passed in when the conversation started, e.g. Make's instagram_id. */
   conversation_initiation_client_data?: { dynamic_variables?: Record<string, unknown> | null } | null;

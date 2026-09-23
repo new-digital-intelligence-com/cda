@@ -441,13 +441,16 @@ anyone to identify themselves**; someone she cannot place is simply helped.
 
 ```
 Website: create account → "+ Add a channel" → CDA-4F2K9M → send it from Telegram, Instagram, Messenger or another email
+Website: create account → "+ Add your phone number" → Ellie knows them on calls in and out
 Any conversation → customer_lookup(system__conversation_id) → known? greet by name, use the last 3 notes
 Conversation ends → post-call webhook → one short note (max 400 characters)
 ```
 
 - **Accounts**: Supabase Auth (`email_confirm: true`); signing up links and verifies that email.
   One code works once, 30 minutes; several accounts of the same kind are fine
-- **Anonymous people** are remembered per channel (same Telegram chat, same browser); their notes
+- **Speed**: Ellie is silent until `customer_lookup` answers, which on a phone call is heard, so its
+  checks run side by side (about 1 s); only an email waits for its late registration
+- **Anonymous people** are remembered per channel (same Telegram chat, same browser, same phone number); their notes
   move to the account when they link. **Robots get no record** (no-reply senders; a sender Ellie
   answers `SKIP` to is dropped again if the record holds nothing else)
 - **Stored**: no messages. `customer_conversations` (conversation → customer) and `customer_notes`
@@ -460,6 +463,7 @@ Conversation ends → post-call webhook → one short note (max 400 characters)
 | Website | Registered when the session starts: signed-in account, else the `cda_visitor` cookie |
 | Instagram, Messenger | The web app registers the conversation to the sender and keeps it in `instagram_threads` / `messenger_threads` |
 | Alexa | The web app registers the conversation to the Alexa account (a short hash of Amazon's user id) |
+| Phone | The customer's own number: `metadata.phone_call.external_number` of the stored conversation (calls in and out), or the number from the staff call list. Added on the website with "+ Add your phone number" (stored unverified: no code is sent to the phone; a number on someone else's account is refused). An unknown caller gets an anonymous record like any other channel |
 | Slack | Not wired up (`integration__slack_user_id` exists) |
 
 > **Never bind a tool parameter to a channel-specific dynamic variable, and never give an
@@ -551,8 +555,11 @@ summary appears under the number. **Stop** lets the call in progress finish and 
 
 How it works (`src/lib/outboundCalls.ts`, tables `call_lists` and `call_list_items`):
 - The call goes out through ElevenLabs' Twilio outbound-call API from the number attached to Ellie
-  (found automatically), with an outbound greeting: *"Hello {name}, this is Ellie, the virtual
-  assistant from CDA. Have you got a moment?"*
+  (found automatically), with an outbound greeting that says why she is calling: *"Hello Helmi,
+  this is Ellie, the virtual assistant from CDA. I'm calling about your new dishwasher's warranty.
+  Have you got a moment?"* The reason is written from the instructions by Claude Haiku (5-second
+  limit; without it the greeting simply leaves the reason out). No name on the list: the name CDA
+  already has for that number is used, if any.
 - Ellie learns why she is calling from **customer_lookup**, which she calls at the start of every
   conversation: for a list call it also returns `outbound_call` (name + instructions). Her prompt
   section *Calls CDA makes to customers* says what to do with it. No dynamic variable is involved,

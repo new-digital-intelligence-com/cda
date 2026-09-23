@@ -50,6 +50,7 @@ function channelLabel(channel: string, key: string): string {
   if (channel === "telegram") return `chat ${key}`;
   if (channel === "instagram" || channel === "messenger") return `id ${key}`;
   if (channel === "alexa") return `Alexa user ${key.slice(0, 6)}`;
+  if (channel === "phone") return key;
   return key;
 }
 

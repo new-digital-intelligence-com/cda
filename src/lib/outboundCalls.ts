@@ -11,7 +11,11 @@
 // conversation anyway: for a call from a list it also returns the staff instructions. No dynamic
 // variable is added to her prompt, so no other channel is touched.
 
+import { anthropicConfigured, askClaude } from "./anthropic";
+import { findByChannel } from "./customers";
 import { supabaseRest as rest } from "./supabase";
+
+export { normalisePhone } from "./phone";
 
 const q = encodeURIComponent;
 const API = "https://api.elevenlabs.io/v1/convai";
@@ -56,17 +60,6 @@ export type CallList = {
 
 export type NewCall = { phone: string; name?: string | null; instructions: string };
 
-/**
- * "07576 593472" → "+447576593472", "00216 90 217 664" → "+21690217664". A number starting with a
- * single 0 is read as a UK number, the way people write them in the UK. Null when it is not a number.
- */
-export function normalisePhone(input: string): string | null {
-  let phone = input.trim().replace(/[\s().-]/g, "");
-  if (phone.startsWith("00")) phone = `+${phone.slice(2)}`;
-  else if (/^0\d{9,10}$/.test(phone)) phone = `+44${phone.slice(1)}`;
-  return /^\+[1-9]\d{7,14}$/.test(phone) ? phone : null;
-}
-
 // --- ElevenLabs --------------------------------------------------------------------------------
 
 function apiKey(): string {
@@ -95,10 +88,37 @@ async function ellieNumber(): Promise<string> {
   return ellieNumberId;
 }
 
-/** What Ellie says as the person picks up. Her default greeting is for people calling CDA. */
-function greeting(name: string | null): string {
-  const first = name?.trim().split(/\s+/)[0];
-  return `Hello${first ? ` ${first}` : ""}, this is Ellie, the virtual assistant from CDA. Have you got a moment?`;
+const REASON_SYSTEM = `You help CDA's virtual assistant open a phone call she makes to a customer.
+From the CDA staff notes, write only the words that finish the sentence "I'm calling about ...",
+spoken to the customer: at most 8 words, starting in lower case, no full stop, no quotes.
+Name the topic only, for example: your new dishwasher's warranty / your recent oven repair.
+Never include names, phone numbers, prices or dates.`;
+
+/** "your new dishwasher's warranty", from the staff instructions. Null when Claude is slow or unsure. */
+async function callReason(instructions: string): Promise<string | null> {
+  if (!anthropicConfigured() || !instructions.trim()) return null;
+  try {
+    const text = await askClaude({ system: REASON_SYSTEM, prompt: instructions, maxTokens: 40, timeoutMs: 5_000 });
+    const reason = text.trim().split("\n")[0].replace(/^["'“]|["'”.]+$/g, "").trim();
+    return /^[a-z][\w\s'’,-]{2,70}$/i.test(reason) && reason.split(/\s+/).length <= 10 ? reason : null;
+  } catch (error) {
+    console.error("call reason could not be written", error);
+    return null;
+  }
+}
+
+/**
+ * What Ellie says as the person picks up (her usual greeting is for people calling CDA): their first
+ * name, from the list or else from what CDA already knows about that number, and why she is calling,
+ * so nobody hangs up during the moment she takes to look them up.
+ */
+async function greeting(item: CallItem): Promise<string> {
+  const [known, reason] = await Promise.all([
+    item.name ? null : findByChannel({ channel: "phone", key: item.phone }).catch(() => null),
+    callReason(item.instructions),
+  ]);
+  const first = (item.name ?? known?.customer.name ?? "").trim().split(/\s+/)[0];
+  return `Hello${first ? ` ${first}` : ""}, this is Ellie, the virtual assistant from CDA.${reason ? ` I'm calling about ${reason}.` : ""} Have you got a moment?`;
 }
 
 function errorText(body: { message?: string; detail?: unknown }, status: number): string {
@@ -118,7 +138,7 @@ async function placeCall(item: CallItem): Promise<string> {
       agent_phone_number_id: await ellieNumber(),
       to_number: item.phone,
       conversation_initiation_client_data: {
-        conversation_config_override: { agent: { first_message: greeting(item.name) } },
+        conversation_config_override: { agent: { first_message: await greeting(item) } },
       },
     }),
     cache: "no-store",
@@ -334,13 +354,15 @@ export async function recentLists(limit = 6): Promise<CallList[]> {
 
 // --- Ellie and ElevenLabs' webhook ---------------------------------------------------------------
 
-/** For customer_lookup: when Ellie is on a call from a list, who she called and why. */
-export async function callBrief(conversationId: string): Promise<{ customer_name: string | null; instructions: string } | null> {
+export type CallBrief = { phone: string; customer_name: string | null; instructions: string };
+
+/** For customer_lookup: when Ellie is on a call from a list, whom she called and why. */
+export async function callBrief(conversationId: string): Promise<CallBrief | null> {
   if (!conversationId) return null;
-  const [item] = await rest<Pick<CallItem, "name" | "instructions">[]>(
-    `call_list_items?conversation_id=eq.${q(conversationId)}&select=name,instructions&limit=1`,
+  const [item] = await rest<Pick<CallItem, "phone" | "name" | "instructions">[]>(
+    `call_list_items?conversation_id=eq.${q(conversationId)}&select=phone,name,instructions&limit=1`,
   );
-  return item ? { customer_name: item.name, instructions: item.instructions } : null;
+  return item ? { phone: item.phone, customer_name: item.name, instructions: item.instructions } : null;
 }
 
 const FAILURE_WORDS: Record<string, string> = { busy: "busy", "no-answer": "no answer" };

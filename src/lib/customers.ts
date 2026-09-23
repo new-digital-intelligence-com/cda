@@ -8,10 +8,11 @@
 // (its id is inside the conversation id) or because the person signed in on the website and sent
 // the short code from that channel.
 
-import { elevenLabsConversation } from "./elevenlabs";
+import { elevenLabsConversation, type ConversationRecord } from "./elevenlabs";
+import { normalisePhone } from "./phone";
 import { supabaseConfigured, supabaseRest as rest } from "./supabase";
 
-export const CHANNELS = ["telegram", "instagram", "messenger", "email", "website", "alexa", "slack"] as const;
+export const CHANNELS = ["telegram", "instagram", "messenger", "email", "phone", "website", "alexa", "slack"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
 export type Customer = { id: string; name: string | null };
@@ -84,16 +85,36 @@ export async function resolveIdentity(body: Record<string, unknown>): Promise<Id
     if (requester) return { channel: "email", key: requester.email, name: requester.name };
   }
 
-  const sender = await emailSender(conversationId);
+  // Asked side by side: Ellie is silent until this answers, and on a phone call that is heard.
+  const [sender, messenger, instagram, record] = await Promise.all([
+    emailSender(conversationId),
+    threadSender("messenger_threads", conversationId),
+    threadSender("instagram_threads", conversationId),
+    storedConversation(conversationId),
+  ]);
   if (sender) return { channel: "email", key: sender.email, name: sender.name };
-
-  const messenger = await threadSender("messenger_threads", conversationId);
   if (messenger) return { channel: "messenger", key: messenger };
-
-  const instagram = (await threadSender("instagram_threads", conversationId)) ?? (await instagramSender(conversationId));
   if (instagram) return { channel: "instagram", key: instagram };
 
+  // A phone call, in or out: the customer's number as the phone network gave it.
+  const phone = normalisePhone(record?.metadata?.phone_call?.external_number);
+  if (phone) return { channel: "phone", key: phone };
+
+  const makeInstagram = instagramSender(record);
+  if (makeInstagram) return { channel: "instagram", key: makeInstagram };
+
   return null;
+}
+
+/** The conversation as ElevenLabs holds it (free to read). Null when it cannot be read. */
+async function storedConversation(conversationId: string): Promise<ConversationRecord | null> {
+  if (!conversationId) return null;
+  try {
+    return await elevenLabsConversation(conversationId);
+  } catch (error) {
+    console.error("conversation lookup failed", error);
+    return null;
+  }
 }
 
 /** A Messenger or Instagram conversation: the web app notes who is in it (src/lib/metaChat.ts). */
@@ -114,17 +135,10 @@ async function threadSender(table: "messenger_threads" | "instagram_threads", co
  * tool parameter: a tool bound to a variable that only Instagram sends would fail on every other
  * channel.
  */
-async function instagramSender(conversationId: string): Promise<string | null> {
-  if (!conversationId) return null;
-  try {
-    const record = await elevenLabsConversation(conversationId);
-    if (record.metadata?.async_metadata?.external_system !== "custom_channel") return null;
-    const id = record.conversation_initiation_client_data?.dynamic_variables?.instagram_id;
-    return typeof id === "string" && /^\d{5,30}$/.test(id) ? id : null;
-  } catch (error) {
-    console.error("Instagram sender lookup failed", error);
-    return null;
-  }
+function instagramSender(record: ConversationRecord | null): string | null {
+  if (record?.metadata?.async_metadata?.external_system !== "custom_channel") return null;
+  const id = record.conversation_initiation_client_data?.dynamic_variables?.instagram_id;
+  return typeof id === "string" && /^\d{5,30}$/.test(id) ? id : null;
 }
 
 /** An email that reached Ellie through Gmail push: the web app noted who sent it (src/lib/emailInbox.ts). */
@@ -327,28 +341,7 @@ export async function redeemLinkCode(rawCode: string, identity: Identity): Promi
   if (row.used_at) return { ok: false, reason: "already_used" };
   if (new Date(row.expires_at).getTime() < Date.now()) return { ok: false, reason: "expired" };
 
-  // That channel may already belong to an anonymous record created while they were chatting.
-  // Move its notes over and drop it, so nothing they told us before the link is lost.
-  const existing = await findByChannel(identity);
-  if (existing && existing.customer.id !== row.customer_id) {
-    const owners = await rest<{ id: string; auth_user_id: string | null }[]>(
-      `customers?id=eq.${q(existing.customer.id)}&select=id,auth_user_id&limit=1`,
-    );
-    if (owners[0] && !owners[0].auth_user_id) {
-      await rest(`customer_notes?customer_id=eq.${q(existing.customer.id)}`, {
-        method: "PATCH",
-        prefer: "return=minimal",
-        body: JSON.stringify({ customer_id: row.customer_id }),
-      });
-      await rest(`customer_conversations?customer_id=eq.${q(existing.customer.id)}`, {
-        method: "PATCH",
-        prefer: "return=minimal",
-        body: JSON.stringify({ customer_id: row.customer_id }),
-      });
-      await rest(`customers?id=eq.${q(existing.customer.id)}`, { method: "DELETE", prefer: "return=minimal" });
-    }
-  }
-
+  await adoptAnonymousOwner(identity, row.customer_id);
   await attachChannel(row.customer_id, identity, true);
   await rest(`link_codes?code=eq.${q(code)}`, {
     method: "PATCH",
@@ -363,6 +356,45 @@ export async function redeemLinkCode(rawCode: string, identity: Identity): Promi
   const customers = await rest<Customer[]>(`customers?id=eq.${q(row.customer_id)}&select=id,name&limit=1`);
   const customer = customers[0];
   return { ok: true, customer, profile: await profileFor(customer) };
+}
+
+/**
+ * A channel may already belong to an anonymous record, created while the person chatted or called
+ * before they had an account. Its notes and conversations move to `customerId` and the record is
+ * dropped, so nothing they told us before is lost. Returns "account" when the channel belongs to
+ * someone else's account (left alone), "ok" otherwise.
+ */
+async function adoptAnonymousOwner(identity: Identity, customerId: string): Promise<"ok" | "account"> {
+  const existing = await findByChannel(identity);
+  if (!existing || existing.customer.id === customerId) return "ok";
+  const owners = await rest<{ id: string; auth_user_id: string | null }[]>(
+    `customers?id=eq.${q(existing.customer.id)}&select=id,auth_user_id&limit=1`,
+  );
+  if (!owners[0]) return "ok";
+  if (owners[0].auth_user_id) return "account";
+  for (const table of ["customer_notes", "customer_conversations"]) {
+    await rest(`${table}?customer_id=eq.${q(existing.customer.id)}`, {
+      method: "PATCH",
+      prefer: "return=minimal",
+      body: JSON.stringify({ customer_id: customerId }),
+    });
+  }
+  await rest(`customers?id=eq.${q(existing.customer.id)}`, { method: "DELETE", prefer: "return=minimal" });
+  return "ok";
+}
+
+/**
+ * The customer's own phone number, added on the website while signed in. Ellie then knows them when
+ * they call, and when CDA calls them. Not proven (no code is sent to the phone), so it is stored as
+ * unverified, and a number that belongs to someone else's account is refused.
+ */
+export async function linkPhone(customerId: string, rawPhone: string): Promise<{ ok: true } | { ok: false; reason: "invalid" | "taken" }> {
+  const phone = normalisePhone(rawPhone);
+  if (!phone) return { ok: false, reason: "invalid" };
+  const identity: Identity = { channel: "phone", key: phone };
+  if ((await adoptAnonymousOwner(identity, customerId)) === "account") return { ok: false, reason: "taken" };
+  await attachChannel(customerId, identity, false);
+  return { ok: true };
 }
 
 // --- the memory itself -------------------------------------------------------------------------

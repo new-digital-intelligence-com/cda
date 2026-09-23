@@ -1,5 +1,5 @@
 import { accountsConfigured, signIn, signUp, signedInCustomerId, signOut } from "@/lib/account";
-import { createLinkCode, listChannels, normaliseEmail, removeChannel } from "@/lib/customers";
+import { createLinkCode, linkPhone, listChannels, normaliseEmail, removeChannel } from "@/lib/customers";
 import { hasValidSession } from "@/lib/session";
 
 // The customer account behind the demo site: sign up, sign in, and the linked channels.
@@ -36,6 +36,19 @@ export async function POST(request: Request) {
     const customerId = await signedInCustomerId();
     if (!customerId) return Response.json({ error: "Please sign in first" }, { status: 401 });
     return Response.json(await createLinkCode(customerId));
+  }
+
+  // Their own phone number: Ellie then knows them when they call CDA, and when CDA calls them.
+  if (action === "phone") {
+    const customerId = await signedInCustomerId();
+    if (!customerId) return Response.json({ error: "Please sign in first" }, { status: 401 });
+    const result = await linkPhone(customerId, text(body.phone));
+    if (!result.ok) {
+      const error =
+        result.reason === "invalid" ? "Please enter a valid phone number" : "This number is already linked to another CDA account";
+      return Response.json({ error }, { status: result.reason === "invalid" ? 400 : 409 });
+    }
+    return Response.json({ ok: true });
   }
 
   if (action === "signup" || action === "signin") {
