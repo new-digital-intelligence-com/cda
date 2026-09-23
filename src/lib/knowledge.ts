@@ -84,8 +84,10 @@ You get questions customers asked that the assistant could not answer, each with
 Group the questions that ask the same thing. For each group:
 - "question": the question once, clear and general, in British English, no personal details
 - "answer": a suggested answer of 1 to 3 sentences for staff to check. Never invent CDA-specific facts
-  (prices, policies, phone numbers, opening hours, model details, delivery areas, availability, dates).
-  Wherever such a fact is needed, write [check: what staff must confirm] in its place.
+  (prices, policies, phone numbers, opening hours, model details, delivery areas, availability, dates),
+  and never say whether CDA does or does not offer something: you do not know. Wherever such a fact is
+  needed, write [check: what staff must confirm] in its place. If the whole answer depends on it, the
+  answer is only the [check: …].
 - "ids": the ids of every question in the group
 Most asked first. Reply with JSON only: {"groups":[{"question":"...","answer":"...","ids":[1,2]}]}`;
 
