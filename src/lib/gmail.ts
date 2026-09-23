@@ -119,11 +119,14 @@ export async function getThread(id: string): Promise<GmailMessage[]> {
   }
 }
 
-/** False once a draft is gone: sent, or deleted by staff. */
+/**
+ * False once a draft is gone: sent, or deleted by staff. Gmail keeps answering for a sent draft's
+ * id, with the sent message behind it, so the DRAFT label is what tells a waiting draft apart.
+ */
 export async function draftExists(id: string): Promise<boolean> {
   try {
-    await gmail(`drafts/${encodeURIComponent(id)}?format=minimal`);
-    return true;
+    const draft = await gmail<{ message?: { labelIds?: string[] } }>(`drafts/${encodeURIComponent(id)}?format=minimal`);
+    return draft.message?.labelIds?.includes("DRAFT") ?? false;
   } catch (error) {
     if (error instanceof GmailError && error.status === 404) return false;
     throw error;
