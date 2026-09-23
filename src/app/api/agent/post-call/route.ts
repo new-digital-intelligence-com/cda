@@ -1,5 +1,6 @@
 import { hasValidWebhookSignature } from "@/lib/agentAuth";
 import { addNote } from "@/lib/customers";
+import { callEnded } from "@/lib/outboundCalls";
 
 /** Notes are a reminder, not a transcript: one short line is enough for the next conversation. */
 const MAX_NOTE_LENGTH = 400;
@@ -12,11 +13,21 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  let event: { type?: string; data?: { conversation_id?: string; analysis?: { transcript_summary?: string } } };
+  let event: {
+    type?: string;
+    data?: { conversation_id?: string; failure_reason?: string; analysis?: { transcript_summary?: string } };
+  };
   try {
     event = JSON.parse(rawBody);
   } catch {
     return Response.json({ ok: true, ignored: "unreadable body" });
+  }
+
+  // A call from a staff call list ended or never connected: the list moves on to the next number
+  // now. Never fatal: the staff page moves lists on as well.
+  if (event.data?.conversation_id && (event.type === "post_call_transcription" || event.type === "call_initiation_failure")) {
+    const failure = event.type === "call_initiation_failure" ? event.data.failure_reason || "unknown" : undefined;
+    await callEnded(event.data.conversation_id, failure).catch((error) => console.error("call list update failed", error));
   }
 
   // Only the transcription event carries a summary; other event types are acknowledged and dropped.

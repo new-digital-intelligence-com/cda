@@ -10,13 +10,20 @@ import {
   resolveIdentity,
   type Profile,
 } from "@/lib/customers";
+import { callBrief } from "@/lib/outboundCalls";
 
 const LATE_REGISTRATION_CHECKS = 3;
 const LATE_REGISTRATION_WAIT_MS = 400;
 
-/** Only say "found" when there is something worth saying, not merely that a row exists. */
-function answer(profile: Profile) {
-  return Response.json({ found: Boolean(profile.name) || profile.recent.length > 0, ...profile });
+type Brief = Awaited<ReturnType<typeof callBrief>>;
+
+/**
+ * Only say "found" when there is something worth saying, not merely that a row exists. On a call
+ * CDA made from a staff call list, outbound_call tells Ellie who she rang and why.
+ */
+function answer(profile: Profile | null, brief: Brief) {
+  const found = profile ? Boolean(profile.name) || profile.recent.length > 0 : false;
+  return Response.json({ found, ...(profile ?? {}), ...(brief ? { outbound_call: brief } : {}) });
 }
 
 // Tool `customer_lookup`: Ellie calls this silently at the start of every conversation.
@@ -36,10 +43,14 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : "";
+    const brief = await callBrief(conversationId).catch((error) => {
+      console.error("customer-lookup: call list lookup failed", error);
+      return null;
+    });
 
     // Website chat, voice and the avatar registered themselves when their session was created.
     const registered = await customerForConversation(conversationId);
-    if (registered) return answer(await profileFor(registered));
+    if (registered) return answer(await profileFor(registered), brief);
 
     const identity = await resolveIdentity(body);
     if (!identity) {
@@ -47,13 +58,13 @@ export async function POST(request: Request) {
       for (let attempt = 0; attempt < LATE_REGISTRATION_CHECKS && mayBeRegisteredLate(conversationId); attempt++) {
         await new Promise((resolve) => setTimeout(resolve, LATE_REGISTRATION_WAIT_MS));
         const late = await customerForConversation(conversationId);
-        if (late) return answer(await profileFor(late));
+        if (late) return answer(await profileFor(late), brief);
       }
-      return Response.json({ found: false });
+      return answer(null, brief);
     }
 
     // No-reply and notification senders are robots, not customers: they get no record at all.
-    if (identity.channel === "email" && isRobotAddress(identity.key)) return Response.json({ found: false });
+    if (identity.channel === "email" && isRobotAddress(identity.key)) return answer(null, brief);
 
     // First time on this channel: remember it anyway, so the next conversation on the same channel
     // picks up where this one left off. An email address comes from the email itself (the Gmail
@@ -62,7 +73,7 @@ export async function POST(request: Request) {
     const customer = await customerForChannel(identity, identity.channel === "email");
     await rememberConversation(conversationId, customer.id, identity.channel);
 
-    return answer(await profileFor(customer));
+    return answer(await profileFor(customer), brief);
   } catch (error) {
     console.error("customer-lookup failed", error);
     return Response.json({ found: false });

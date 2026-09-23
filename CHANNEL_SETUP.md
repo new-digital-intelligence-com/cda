@@ -41,10 +41,11 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
 | Instagram **@new_digital_intelligence** | ✅ | Meta webhook → web app → Custom Channel "CDA Instagram" |
 | Facebook Messenger, Page **New Digital Intelligence** | ✅ | Meta webhook → web app → Custom Channel "CDA Messenger" |
 | Alexa skill **CDA Assistant** (Echo / Alexa app) | ✅ (development) | Amazon → web app → Custom Channel "CDA Alexa" |
-| Intercom chat bubble (on the customer page) | ⏳ Being set up | Intercom → ElevenLabs' native Intercom integration (section 7) |
+| Intercom chat bubble (on the customer page) | ✅ | Intercom → ElevenLabs' native Intercom integration (section 7) |
 | Hosted page / QR code | ✅ | ElevenLabs talk-to link (no password) |
 | Slack | ⏳ | Waiting for a Slack workspace (section 14) |
-| WhatsApp, phone number | ⏸ | Parked (section 14) |
+| Phone line **+44 7576 593472** (Twilio, NDI's account) | ✅ | Imported into ElevenLabs natively: callers reach Ellie; Ellie calls out from the staff call list (section 10) |
+| WhatsApp | ⏸ | Parked (section 14) |
 
 ```
  Website chat / voice / files ─────────►┐
@@ -85,7 +86,8 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
 | Languages | **English** (default): TTS **Eleven Flash v2**. **Polish**: language preset `pl` with a Polish greeting and TTS **Eleven Flash v2.5** (multilingual), chosen by the website at the start of a voice or avatar call. Built-in tool **language detection** is on: during a call Ellie follows the customer between English and Polish by herself. Security → the `language` override is allowed (as is `text_only` for the chat) |
 | Speech to text | Scribe Realtime, quality high; turn model turn_v3, turn timeout 7 s |
 | Audio | Input **PCM 16000 Hz** (Anam needs it), output PCM 24000 Hz |
-| First message | "Hello, you're through to CDA's virtual assistant, Ellie. How can I help you today?" (not sent on Custom Channel text channels) |
+| First message | "Hello, you're through to CDA's virtual assistant, Ellie. How can I help you today?" (not sent on Custom Channel text channels). Security allows overriding it: outbound calls use their own greeting |
+| Phone | UK mobile **+44 7576 593472** bought in NDI's Twilio account and imported with ElevenLabs' native Twilio integration (voice + SMS, inbound and outbound). System tools **end_call** and **voicemail_detection** are on |
 | Files | Images and PDFs, max 10 per conversation |
 | Transcripts | Kept without limit (`retention_days: -1`) |
 | Cost | Voice or avatar ≈ **600 credits a minute**; a text reply ≈ 60–100 credits |
@@ -99,7 +101,8 @@ images and PDFs; *Email only*: body of one plain-text reply, never asks for the 
 `SKIP` to robots; *Alexa only*: 1–3 short spoken sentences) · Goal · Knowledge rules (only knowledge-base facts; spare parts delivery: give both
 48 h and 3–5 days; warranty: only current 60-day terms) · Collecting details for repairs · Safety (gas
 0800 111 999) · Handover to a human · Style (British English) · Operating mode: AGENT (summary of the
-request, never claims something is booked) · Recognising the customer (section 8).
+request, never claims something is booked) · Recognising the customer (section 8) · Calls CDA makes to
+customers (outbound calls from the staff call list, section 10).
 
 ### Knowledge base
 
@@ -519,12 +522,13 @@ Costs: LiveKit Cloud free "Build" plan (5,000 participant-minutes a month; proje
 ## 10. Admin page
 
 `https://cda-demo.vercel.app/admin` — staff only, **Aida staff password** (the site password does not
-open it; `/aida` forwards here). Three tabs, which stay open once visited so a call is never dropped:
+open it; `/aida` forwards here). Four tabs, which stay open once visited so a call is never dropped:
 
 | Tab | What staff do |
 |---|---|
 | 📞 **Aida rooms** | Create, join, close rooms; read and email closed ones (section 9) |
 | 👥 **Customers** | Numbers (customers, accounts, 2+ channels, active this week / now, conversations per channel, email outcomes, open rooms); a searchable list; one customer's channels (✓ verified), activity and timeline |
+| 📲 **Call list** | Phone numbers, each with instructions for Ellie; **Start calling** and she phones them one by one (below) |
 | ✉️ **Email** | Send automatically / Draft for staff, and the latest emails with what happened to each |
 
 **AI insights** (Claude Haiku, `ANTHROPIC_MODEL=claude-haiku-4-5`, only when a staff member clicks,
@@ -536,6 +540,32 @@ nothing stored, a fraction of a cent each):
 Customer notes and transcripts are sent to Anthropic for these insights (fine for the demo; for real
 customers it belongs in the privacy notice). Website "channels" are browser cookies, so only 6
 characters are shown.
+
+### Call list (Ellie phones customers)
+
+Staff enter phone numbers (`+44…`, or `07…` for the UK), an optional name and **instructions for
+Ellie** for each, then press **Start calling**. Ellie phones them **one at a time** from the demo
+line **+44 7576 593472**. No answer, busy or voicemail: she tries the same number again a minute
+later, **up to 3 tries**, then moves to the next. Reached means someone spoke with her; the call's
+summary appears under the number. **Stop** lets the call in progress finish and places no more.
+
+How it works (`src/lib/outboundCalls.ts`, tables `call_lists` and `call_list_items`):
+- The call goes out through ElevenLabs' Twilio outbound-call API from the number attached to Ellie
+  (found automatically), with an outbound greeting: *"Hello {name}, this is Ellie, the virtual
+  assistant from CDA. Have you got a moment?"*
+- Ellie learns why she is calling from **customer_lookup**, which she calls at the start of every
+  conversation: for a list call it also returns `outbound_call` (name + instructions). Her prompt
+  section *Calls CDA makes to customers* says what to do with it. No dynamic variable is involved,
+  so no other channel is affected.
+- A list moves on when the staff page asks (every 4 seconds while a list runs, `GET /api/admin/calls`)
+  and when ElevenLabs' post-call webhook reports that a call ended (`post_call_transcription`) or did
+  not connect (`call_initiation_failure`, with busy / no-answer). **Keep the page open while a list
+  runs**: the retry a minute later needs it.
+- Only one call per list at a time: the list's `current_item` is claimed with a conditional update.
+- Ellie has **end_call** (she hangs up after goodbye) and **voicemail_detection** (she leaves a short
+  message and hangs up; that try counts as not reached).
+- Twilio only calls countries switched on in **Voice → Settings → Geo permissions**; a number in
+  another country fails at once and uses up a try.
 
 ---
 
@@ -638,7 +668,6 @@ token, Messenger Page token, Anthropic, Freshdesk; delete the Make API token.
 |---|---|---|
 | **Slack** | Waiting | A workspace under Slack's free 10-app limit (the NDI workspace is full), then the steps below |
 | **WhatsApp** | Parked | Meta restricted the WhatsApp Business account: appeal with an own brand name; voice calls also need a 2,000/day messaging limit |
-| **Phone number** | Parked | A number bought from **Twilio** (easiest) or a SIP provider → ElevenLabs → Phone Numbers → Import → assign Ellie. No audio change needed. Set max call length, daily and concurrency limits. A mobile SIM cannot be used |
 
 ### Slack steps (native ElevenLabs integration, own app "CDA_Support")
 

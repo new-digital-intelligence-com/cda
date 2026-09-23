@@ -203,3 +203,42 @@ create table if not exists alexa_replies (
 );
 
 alter table alexa_replies enable row level security;
+
+-- ---------------------------------------------------------------------------------------------
+-- Call lists: staff enter phone numbers with instructions on /admin, and Ellie phones them one by
+-- one from the Twilio number, up to 3 tries each (src/lib/outboundCalls.ts). current_item is the
+-- call in progress; claiming it with a conditional update is what keeps it to one call at a time.
+-- ---------------------------------------------------------------------------------------------
+
+create table if not exists call_lists (
+  id           uuid primary key default gen_random_uuid(),
+  title        text,
+  created_by   text,
+  status       text not null default 'running',   -- running | stopped | done
+  current_item uuid,
+  created_at   timestamptz not null default now(),
+  finished_at  timestamptz
+);
+
+create table if not exists call_list_items (
+  id              uuid primary key default gen_random_uuid(),
+  list_id         uuid not null references call_lists (id) on delete cascade,
+  position        int not null,
+  phone           text not null,                   -- +447…, as dialled
+  name            text,
+  instructions    text not null default '',        -- for Ellie, never read out
+  status          text not null default 'waiting', -- waiting | calling | reached | failed | stopped
+  attempts        int not null default 0,
+  next_attempt_at timestamptz,
+  conversation_id text,                            -- the latest attempt's ElevenLabs conversation
+  last_outcome    text,                            -- e.g. "no answer", "busy", "voicemail"
+  summary         text,                            -- ElevenLabs' summary once reached
+  started_at      timestamptz,
+  finished_at     timestamptz
+);
+
+create index if not exists call_list_items_list_idx on call_list_items (list_id, position);
+create index if not exists call_list_items_conversation_idx on call_list_items (conversation_id);
+
+alter table call_lists      enable row level security;
+alter table call_list_items enable row level security;
