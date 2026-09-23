@@ -101,7 +101,24 @@ export function isRealCorrection(originalText: string, correctedText: string): b
   return changed >= 6 && changed / longest >= 0.15;
 }
 
+export type DraftOutcome = "unchanged" | "polished" | "corrected" | "declined" | "discarded";
+
+/** What staff did to a draft before sending it: nothing, style only, or a real correction. */
+export function editKind(draft: string, sent: string): "unchanged" | "polished" | "corrected" {
+  if (words(draft).join(" ") === words(sent).join(" ")) return "unchanged";
+  return isRealCorrection(draft, sent) ? "corrected" : "polished";
+}
+
 // --- storing ------------------------------------------------------------------------------------------
+
+/** One outcome per draft, for the "right first time" score. Only a statistic: never stops the rest. */
+async function saveOutcome(ref: string, source: "email" | "aida", outcome: DraftOutcome) {
+  await rest("draft_outcomes?on_conflict=ref", {
+    method: "POST",
+    prefer: "resolution=ignore-duplicates,return=minimal",
+    body: JSON.stringify({ ref, source, outcome }),
+  }).catch((error) => console.error("draft outcome not counted", ref, error));
+}
 
 async function saveItem(item: Omit<FeedbackItem, "id" | "created_at"> & { ref: string }, update = false) {
   await rest("knowledge_feedback?on_conflict=ref", {
@@ -233,6 +250,10 @@ export async function aidaDraftSent(roomId: string, draftRef: string, sent: stri
   const events = await listEvents(roomId, "employee");
   const draft = events.find((event) => event.kind === "suggestion" && event.ref === draftRef);
   if (!draft?.text) return;
+  const written = draft.text.replace(STAFF_NOTE, "").trim();
+  const kind = editKind(written, sent);
+  await saveOutcome(`aida:${roomId}:${draftRef}`, "aida", kind);
+  if (kind !== "corrected") return;
   // What Aida was answering: the customer's last words before her draft.
   const asked = events.filter(
     (event) => event.id < draft.id && event.author_role === "customer" && (event.kind === "speech" || event.kind === "chat"),
@@ -243,9 +264,14 @@ export async function aidaDraftSent(roomId: string, draftRef: string, sent: stri
     channel: "aida",
     conversationId: null,
     question: asked.at(-1)?.text ?? null,
-    original: draft.text.replace(STAFF_NOTE, "").trim(),
+    original: written,
     corrected: sent,
   });
+}
+
+/** An Aida room: staff declined draft `draftRef`. */
+export async function aidaDraftDeclined(roomId: string, draftRef: string) {
+  await saveOutcome(`aida:${roomId}:${draftRef}`, "aida", "declined");
 }
 
 /** An email reply as typed, without the quoted email below it ("On … wrote:", "> …"). */
@@ -287,18 +313,25 @@ export async function checkSentDrafts(): Promise<number> {
       const sent = thread
         .filter((message: GmailMessage) => message.labelIds?.includes("SENT") && Number(message.internalDate ?? 0) > receivedAt)
         .sort((a, b) => Number(a.internalDate ?? 0) - Number(b.internalDate ?? 0))[0];
-      if (sent && row.ellie_reply) {
-        const asked = customerEmail ? withoutQuotedHistory(parseGmailMessage(customerEmail).text) : "";
-        const question = [row.subject, asked].filter(Boolean).join(" — ").slice(0, 600);
-        if (await recordCorrection({
-          ref: `email:${row.gmail_id}`,
-          source: "email",
-          channel: "email",
-          conversationId: row.conversation_id,
-          question: question || null,
-          original: row.ellie_reply,
-          corrected: withoutQuotedHistory(parseGmailMessage(sent).text),
-        })) found++;
+      if (!sent) {
+        await saveOutcome(`email:${row.gmail_id}`, "email", "discarded");
+      } else if (row.ellie_reply) {
+        const sentText = withoutQuotedHistory(parseGmailMessage(sent).text);
+        const kind = editKind(row.ellie_reply, sentText);
+        await saveOutcome(`email:${row.gmail_id}`, "email", kind);
+        if (kind === "corrected") {
+          const asked = customerEmail ? withoutQuotedHistory(parseGmailMessage(customerEmail).text) : "";
+          const question = [row.subject, asked].filter(Boolean).join(" — ").slice(0, 600);
+          if (await recordCorrection({
+            ref: `email:${row.gmail_id}`,
+            source: "email",
+            channel: "email",
+            conversationId: row.conversation_id,
+            question: question || null,
+            original: row.ellie_reply,
+            corrected: sentText,
+          })) found++;
+        }
       }
       await rest(`email_messages?gmail_id=eq.${q(row.gmail_id)}`, {
         method: "PATCH",
@@ -328,6 +361,32 @@ export async function weekScore(): Promise<{ likes: number; dislikes: number }> 
     likes: rows.filter((row) => row.rating === "like").length,
     dislikes: rows.filter((row) => row.rating === "dislike").length,
   };
+}
+
+export type DraftCounts = Record<DraftOutcome, number> & { total: number };
+
+/** What happened to Ellie's email drafts and Aida's drafts in the last 7 days. */
+export async function draftStats(): Promise<{ email: DraftCounts; aida: DraftCounts }> {
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const rows = await rest<{ source: string; outcome: DraftOutcome }[]>(
+    `draft_outcomes?created_at=gt.${q(since)}&select=source,outcome&limit=10000`,
+  ).catch((error) => {
+    console.error("draft outcomes could not be read", error);
+    return [];
+  });
+  const count = (source: string): DraftCounts => {
+    const mine = rows.filter((row) => row.source === source);
+    const of = (outcome: DraftOutcome) => mine.filter((row) => row.outcome === outcome).length;
+    return {
+      total: mine.length,
+      unchanged: of("unchanged"),
+      polished: of("polished"),
+      corrected: of("corrected"),
+      declined: of("declined"),
+      discarded: of("discarded"),
+    };
+  };
+  return { email: count("email"), aida: count("aida") };
 }
 
 export async function closeFeedback(ids: number[], status: "answered" | "dismissed", faqId?: number) {

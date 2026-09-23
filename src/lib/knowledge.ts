@@ -11,7 +11,7 @@
 
 import { anthropicConfigured, askClaude, parseJsonObject } from "./anthropic";
 import { conversationChannel } from "./customers";
-import { closeFeedback, openFeedback, weekScore, type FeedbackItem } from "./feedback";
+import { closeFeedback, draftStats, openFeedback, weekScore, type DraftCounts, type FeedbackItem } from "./feedback";
 import { supabaseRest as rest } from "./supabase";
 
 const q = encodeURIComponent;
@@ -66,19 +66,21 @@ export type KnowledgeState = {
   gaps: Gap[];
   feedback: FeedbackItem[];
   score: { likes: number; dislikes: number };
+  drafts: { email: DraftCounts; aida: DraftCounts };
   faq: Faq[];
   published: Published;
 };
 
 export async function knowledgeState(): Promise<KnowledgeState> {
-  const [gaps, feedback, score, faq, published] = await Promise.all([
+  const [gaps, feedback, score, drafts, faq, published] = await Promise.all([
     rest<Gap[]>("knowledge_gaps?status=eq.open&select=id,conversation_id,channel,question,created_at&order=created_at.desc&limit=200"),
     openFeedback(),
     weekScore(),
+    draftStats(),
     rest<Faq[]>("knowledge_faq?select=id,question,answer,approved_by,updated_at&order=id.asc"),
     rest<Published[]>("knowledge_publish?id=eq.1&select=document_id,entries,published_at"),
   ]);
-  return { gaps, feedback, score, faq, published: published[0] ?? { document_id: null, entries: 0, published_at: null } };
+  return { gaps, feedback, score, drafts, faq, published: published[0] ?? { document_id: null, entries: 0, published_at: null } };
 }
 
 const GROUP_SYSTEM = `You help CDA customer care staff (CDA: UK kitchen appliance brand) improve their virtual assistant.

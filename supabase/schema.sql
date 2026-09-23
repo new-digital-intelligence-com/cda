@@ -331,3 +331,18 @@ alter table email_messages add column if not exists reply_checked_at timestamptz
 
 alter table knowledge_feedback enable row level security;
 alter table feedback_ratings   enable row level security;
+
+-- What staff did with each draft Ellie (email draft mode) or Aida (rooms) wrote: sent unchanged,
+-- polished (style only), corrected (a fact changed), declined / discarded. Only the outcome, no
+-- text: it is the "right first time" score on /admin → 📚 Knowledge.
+create table if not exists draft_outcomes (
+  id         bigint generated always as identity primary key,
+  ref        text unique,                       -- email:<gmail id> or aida:<room>:<draft>
+  source     text not null,                     -- email | aida
+  outcome    text not null,                     -- unchanged | polished | corrected | declined | discarded
+  created_at timestamptz not null default now()
+);
+
+create index if not exists draft_outcomes_recent_idx on draft_outcomes (created_at desc);
+
+alter table draft_outcomes enable row level security;

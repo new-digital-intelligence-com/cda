@@ -1,5 +1,5 @@
 import { addEvent, cleanText, EMPLOYEE_ONLY_KINDS, EVENT_KINDS, findRoomByLivekitName, listEvents, type EventKind } from "@/lib/aida";
-import { aidaDraftSent } from "@/lib/feedback";
+import { aidaDraftDeclined, aidaDraftSent } from "@/lib/feedback";
 import { ticketFromRequest } from "@/lib/livekit";
 
 // The record of a room. Each person saves only what they themselves said or decided, so nothing is
@@ -40,6 +40,9 @@ export async function POST(request: Request) {
   // for staff to turn into an approved answer. Never fatal for the room.
   if (kind === "approved" && ref) {
     await aidaDraftSent(found.room.id, ref, text).catch((error) => console.error("Aida correction check failed", error));
+  }
+  if (kind === "declined" && ref) {
+    await aidaDraftDeclined(found.room.id, ref).catch((error) => console.error("Aida decline not counted", error));
   }
   return Response.json({ ok: true });
 }

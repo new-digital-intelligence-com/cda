@@ -586,6 +586,9 @@ Four sources, all automatic (`src/lib/feedback.ts`, tables `knowledge_feedback` 
 - Only a **real correction** counts: a changed number (phone, price, date, model) always does;
   otherwise at least 6 words and 15% of the text must differ once greeting and sign-off are left out.
   A new "Dear Mario", "Kind regards, Jean" or a typo does not
+- **Right first time**: every draft is counted (`draft_outcomes`) as sent unchanged, style edit only,
+  corrected, or not sent (declined in a room / email draft discarded), shown per week for Ellie's email
+  drafts and Aida's room drafts: *"18 of 20 sent unchanged · 1 style edit · 1 corrected"*
 - Every rating counts in the score at the top: *"This week: 12 👍 · 3 👎"*. A 👎, a complaint or a
   correction waits as a card: the customer's question, Ellie's or Aida's answer, what the customer
   said or what staff sent instead

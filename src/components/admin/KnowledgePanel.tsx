@@ -23,7 +23,25 @@ type FeedbackItem = {
   created_at: string;
 };
 type Score = { likes: number; dislikes: number };
-type State = { gaps: Gap[]; feedback: FeedbackItem[]; score: Score; faq: Faq[]; published: Published };
+type DraftCounts = { total: number; unchanged: number; polished: number; corrected: number; declined: number; discarded: number };
+type State = {
+  gaps: Gap[];
+  feedback: FeedbackItem[];
+  score: Score;
+  drafts: { email: DraftCounts; aida: DraftCounts };
+  faq: Faq[];
+  published: Published;
+};
+
+/** "18 of 20 sent unchanged · 1 style edit · 1 corrected", or null when there were none this week. */
+function draftLine(counts: DraftCounts | undefined, notSent: "declined" | "discarded"): string | null {
+  if (!counts?.total) return null;
+  const parts = [`${counts.unchanged} of ${counts.total} sent unchanged`];
+  if (counts.polished) parts.push(`${counts.polished} style edit${counts.polished === 1 ? "" : "s"}`);
+  if (counts.corrected) parts.push(`${counts.corrected} corrected`);
+  if (counts[notSent]) parts.push(`${counts[notSent]} ${notSent === "declined" ? "declined" : "not sent"}`);
+  return parts.join(" · ");
+}
 
 const CHANNELS: Record<string, string> = {
   website: "Website",
@@ -293,6 +311,17 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
           👎 from the website chat, complaints customers made in any conversation, and facts staff changed in Aida&apos;s or
           Ellie&apos;s drafts before sending. Turn one into an answer for everyone, or dismiss it when Ellie was right.
         </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[
+            { label: "✉️ Ellie's email drafts", line: draftLine(state.drafts?.email, "discarded") },
+            { label: "📞 Aida's drafts in rooms", line: draftLine(state.drafts?.aida, "declined") },
+          ].map(({ label, line }) => (
+            <div key={label} className="rounded-lg bg-cda-grey-light px-3 py-2 text-xs">
+              <p className="font-semibold text-cda-dark">{label}, this week</p>
+              <p className="text-cda-text">{line ?? "None yet."}</p>
+            </div>
+          ))}
+        </div>
         {state.feedback.length === 0 && <p className="text-sm text-cda-text">Nothing open.</p>}
 
         {state.feedback.map((item) => {
