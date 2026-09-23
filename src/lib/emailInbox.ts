@@ -363,7 +363,12 @@ export async function handleEllieReply(payload: ReplyWebhook): Promise<{ outcome
       await label(row.gmail_id, "replied");
     } else {
       const draftId = await createDraft(raw, row.thread_id);
-      await move(row.gmail_id, ["replying"], { status: "draft", mode, draft_id: draftId, ellie_reply: text });
+      await move(row.gmail_id, ["replying"], { status: "draft", mode, draft_id: draftId, ellie_reply: text }).catch((error) => {
+        // Before supabase/schema.sql is re-run the comparison columns are missing: the draft itself
+        // is still there, so record it without them rather than calling it a failure.
+        console.error("could not keep Ellie's draft for comparison", error);
+        return move(row.gmail_id, ["replying"], { status: "draft", mode });
+      });
       await label(row.gmail_id, "draft");
     }
     return { outcome: mode === "auto" ? "sent" : "draft" };
