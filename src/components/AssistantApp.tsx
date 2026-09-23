@@ -3,6 +3,7 @@
 import { ConversationProvider, useConversation } from "@elevenlabs/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AidaJoin } from "./aida/AidaJoin";
+import { AnswerFeedback } from "./AnswerFeedback";
 import { AvatarPanel } from "./AvatarPanel";
 import { EmailTranscriptForm, postEmail } from "./EmailTranscriptForm";
 import { LanguagePicker } from "./LanguagePicker";
@@ -293,9 +294,18 @@ function Assistant() {
                 </div>
               </div>
             )}
-            {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
-            ))}
+            {messages.map((message, index) => {
+              // 👍 / 👎 under each answer to a question (not under the greeting).
+              const asked = messages.slice(0, index).findLast((earlier) => earlier.role === "user");
+              return (
+                <div key={message.id}>
+                  <MessageBubble message={message} />
+                  {message.role === "agent" && asked && conversationId && message.text && (
+                    <AnswerFeedback conversationId={conversationId} messageId={message.id} question={asked.text} answer={message.text} />
+                  )}
+                </div>
+              );
+            })}
             {(awaitingReply || busy) && <TypingIndicator />}
             <div ref={listEndRef} />
           </div>

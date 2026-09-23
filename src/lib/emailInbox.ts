@@ -44,6 +44,9 @@ export type EmailRow = {
   conversation_id: string | null;
   mode: string | null;
   created_at: string;
+  /** Draft mode: the Gmail draft and Ellie's text, to compare with what staff finally send. */
+  draft_id?: string | null;
+  ellie_reply?: string | null;
 };
 
 /** Mail older than this is never answered, e.g. an old email moved back into the inbox. */
@@ -359,8 +362,8 @@ export async function handleEllieReply(payload: ReplyWebhook): Promise<{ outcome
       await move(row.gmail_id, ["replying"], { status: "sent", mode });
       await label(row.gmail_id, "replied");
     } else {
-      await createDraft(raw, row.thread_id);
-      await move(row.gmail_id, ["replying"], { status: "draft", mode });
+      const draftId = await createDraft(raw, row.thread_id);
+      await move(row.gmail_id, ["replying"], { status: "draft", mode, draft_id: draftId, ellie_reply: text });
       await label(row.gmail_id, "draft");
     }
     return { outcome: mode === "auto" ? "sent" : "draft" };

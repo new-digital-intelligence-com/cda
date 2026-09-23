@@ -284,3 +284,50 @@ create table if not exists knowledge_publish (
 alter table knowledge_gaps    enable row level security;
 alter table knowledge_faq     enable row level security;
 alter table knowledge_publish enable row level security;
+
+-- ---------------------------------------------------------------------------------------------
+-- Feedback: what customers think of Ellie's answers, and where staff corrected a draft. Negative
+-- feedback and real corrections wait on /admin (📚 Knowledge → Feedback) for staff to turn into an
+-- approved answer; every rating counts towards the weekly 👍 / 👎 score (src/lib/feedback.ts).
+-- ---------------------------------------------------------------------------------------------
+
+create table if not exists knowledge_feedback (
+  id               bigint generated always as identity primary key,
+  ref              text unique,                 -- where it came from, so it is stored once:
+                                                -- chat:<conversation>:<message>, said:<conversation>,
+                                                -- aida:<room>:<draft>, email:<gmail id>
+  kind             text not null,               -- feedback | correction
+  source           text not null,               -- chat (👎 button) | said (in the conversation) | aida | email
+  channel          text,
+  conversation_id  text,
+  question         text,                        -- what the customer asked
+  original_answer  text,                        -- what Ellie or Aida answered
+  comment          text,                        -- feedback: what the customer said about it
+  corrected_answer text,                        -- correction: what staff sent instead
+  status           text not null default 'open', -- open | answered | dismissed
+  faq_id           bigint,
+  created_at       timestamptz not null default now()
+);
+
+create index if not exists knowledge_feedback_status_idx on knowledge_feedback (status, created_at desc);
+
+-- Every 👍 / 👎, from the chat buttons and from what customers say (one per answer or conversation).
+create table if not exists feedback_ratings (
+  id              bigint generated always as identity primary key,
+  ref             text unique,
+  conversation_id text,
+  channel         text,
+  rating          text not null,                -- like | dislike
+  source          text not null,                -- button | said
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists feedback_ratings_recent_idx on feedback_ratings (created_at desc);
+
+-- Email draft mode: Ellie's draft is kept so that what staff finally send can be compared with it.
+alter table email_messages add column if not exists draft_id         text;
+alter table email_messages add column if not exists ellie_reply      text;
+alter table email_messages add column if not exists reply_checked_at timestamptz;
+
+alter table knowledge_feedback enable row level security;
+alter table feedback_ratings   enable row level security;

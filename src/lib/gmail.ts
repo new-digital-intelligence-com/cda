@@ -108,6 +108,28 @@ export async function getMessage(id: string): Promise<GmailMessage | null> {
   }
 }
 
+/** Every message of a thread, oldest first, including the ones the mailbox sent. */
+export async function getThread(id: string): Promise<GmailMessage[]> {
+  try {
+    const thread = await gmail<{ messages?: GmailMessage[] }>(`threads/${encodeURIComponent(id)}?format=full`);
+    return thread.messages ?? [];
+  } catch (error) {
+    if (error instanceof GmailError && error.status === 404) return [];
+    throw error;
+  }
+}
+
+/** False once a draft is gone: sent, or deleted by staff. */
+export async function draftExists(id: string): Promise<boolean> {
+  try {
+    await gmail(`drafts/${encodeURIComponent(id)}?format=minimal`);
+    return true;
+  } catch (error) {
+    if (error instanceof GmailError && error.status === 404) return false;
+    throw error;
+  }
+}
+
 // --- replying ----------------------------------------------------------------------------------
 
 export async function sendRaw(raw: string, threadId: string): Promise<string> {

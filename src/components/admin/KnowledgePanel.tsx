@@ -2,15 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-// Ellie learns from the questions she could not answer. They arrive here after each conversation
-// (ElevenLabs' post-call analysis); Claude can group repeats and suggest wording; staff write or fix
-// the answer and approve it, and it is published to Ellie as "CDA approved FAQ" straight away.
+// Ellie learns from the questions she could not answer and from feedback on her answers. Both arrive
+// here by themselves: unanswered questions and what customers said come from ElevenLabs' post-call
+// analysis, 👎 from the website chat, and corrections from staff editing Aida's or Ellie's drafts.
+// Staff write or fix the answer and approve it, and it is published as "CDA approved FAQ" at once.
 
 type Gap = { id: number; conversation_id: string | null; channel: string | null; question: string; created_at: string };
 type Faq = { id: number; question: string; answer: string; approved_by: string | null; updated_at: string };
 type Published = { document_id: string | null; entries: number; published_at: string | null };
 type Group = { question: string; answer: string; ids: number[] };
-type State = { gaps: Gap[]; faq: Faq[]; published: Published };
+type FeedbackItem = {
+  id: number;
+  kind: "feedback" | "correction";
+  source: "chat" | "said" | "aida" | "email";
+  channel: string | null;
+  question: string | null;
+  original_answer: string | null;
+  comment: string | null;
+  corrected_answer: string | null;
+  created_at: string;
+};
+type Score = { likes: number; dislikes: number };
+type State = { gaps: Gap[]; feedback: FeedbackItem[]; score: Score; faq: Faq[]; published: Published };
 
 const CHANNELS: Record<string, string> = {
   website: "Website",
@@ -20,7 +33,15 @@ const CHANNELS: Record<string, string> = {
   messenger: "Messenger",
   phone: "Phone",
   alexa: "Alexa",
+  aida: "Aida room",
 };
+
+function sourceLabel(item: FeedbackItem): string {
+  if (item.source === "chat") return "👎 Website chat";
+  if (item.source === "said") return `💬 Said by the customer · ${item.channel ? CHANNELS[item.channel] ?? item.channel : "unknown channel"}`;
+  if (item.source === "aida") return "✏️ Staff corrected Aida's draft";
+  return "✏️ Staff edited Ellie's email draft";
+}
 
 const UNFINISHED = /\[check/i;
 
@@ -59,7 +80,7 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
   const load = useCallback(async () => {
     try {
       const body = await call("/api/admin/knowledge");
-      if (body?.gaps && body.faq && body.published) setState({ gaps: body.gaps, faq: body.faq, published: body.published });
+      if (body?.gaps && body.faq && body.published) setState(body as State);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the knowledge gaps.");
     }
@@ -78,7 +99,7 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
     try {
       const body = await call("/api/admin/knowledge", { method: "POST", body: JSON.stringify(payload) });
       if (body?.gaps && body.faq && body.published) {
-        setState({ gaps: body.gaps, faq: body.faq, published: body.published });
+        setState(body as State);
         const open = new Set(body.gaps.map((gap) => gap.id));
         setGroups((current) => current?.map((group) => ({ ...group, ids: group.ids.filter((id) => open.has(id)) })).filter((group) => group.ids.length) ?? null);
         if (done) setNotice(done);
@@ -90,6 +111,30 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
       setBusy(null);
     }
     return false;
+  }
+
+  async function makeGeneral(item: FeedbackItem, key: string) {
+    setBusy(`general-${key}`);
+    setError(null);
+    try {
+      const body = (await call("/api/admin/knowledge/generalise", {
+        method: "POST",
+        body: JSON.stringify({
+          question: item.question,
+          originalAnswer: item.original_answer,
+          correctedAnswer: item.corrected_answer,
+          comment: item.comment,
+        }),
+      })) as { question?: string; answer?: string } | null;
+      if (body?.question && body.answer) {
+        const { question, answer } = body;
+        setDrafts((current) => ({ ...current, [key]: { question, answer } }));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Claude could not write a general answer.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function group() {
@@ -131,11 +176,11 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
       <section className="rounded-xl bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="font-semibold text-cda-dark">Ellie learns from what she could not answer</h2>
+            <h2 className="font-semibold text-cda-dark">Ellie learns from what she could not answer, and from feedback</h2>
             <p className="mt-1 text-sm text-cda-text">
-              After every conversation, on every channel, the questions Ellie could not answer from her knowledge appear
-              below. Write the right answer and approve it: Ellie uses it from her next conversation on. Nothing reaches her
-              without your approval.
+              After every conversation, on every channel, the questions Ellie could not answer, what customers thought of her
+              answers, and the facts staff corrected appear below. Write the right answer and approve it: Ellie and Aida use it
+              from their next conversation on. Nothing reaches them without your approval.
             </p>
           </div>
           <button type="button" onClick={() => void load()} className="text-xs text-cda-text underline">
@@ -227,6 +272,109 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
                     )
                   }
                   disabled={busy !== null || !draft.answer.trim() || unfinished}
+                  className="rounded-full bg-cda-red px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {busy === `approve-${key}` ? "Teaching Ellie…" : "Approve and teach Ellie"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="space-y-3 rounded-xl bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold text-cda-dark">Feedback and corrections ({state.feedback.length})</h2>
+          <span className="rounded-full bg-cda-grey-light px-3 py-1 text-xs font-semibold text-cda-dark">
+            This week: {state.score.likes} 👍 · {state.score.dislikes} 👎
+          </span>
+        </div>
+        <p className="text-xs text-cda-text">
+          👎 from the website chat, complaints customers made in any conversation, and facts staff changed in Aida&apos;s or
+          Ellie&apos;s drafts before sending. Turn one into an answer for everyone, or dismiss it when Ellie was right.
+        </p>
+        {state.feedback.length === 0 && <p className="text-sm text-cda-text">Nothing open.</p>}
+
+        {state.feedback.map((item) => {
+          const key = `f-${item.id}`;
+          const draft = drafts[key] ?? {
+            question: (item.question ?? "").slice(0, 300),
+            answer: item.kind === "correction" ? item.corrected_answer ?? "" : "",
+          };
+          const unfinished = UNFINISHED.test(draft.answer);
+          const setDraft = (field: "question" | "answer", value: string) =>
+            setDrafts((current) => ({ ...current, [key]: { ...draft, [field]: value } }));
+          const who = item.source === "aida" ? "Aida" : "Ellie";
+          return (
+            <div key={key} className="space-y-2 rounded-lg border border-cda-grey p-3">
+              <p className="text-xs text-cda-text">
+                <span className="font-semibold text-cda-dark">{sourceLabel(item)}</span> · {when(item.created_at)}
+              </p>
+              {item.question && (
+                <p className="text-sm">
+                  <span className="text-xs font-semibold text-cda-text">Customer asked: </span>
+                  {item.question}
+                </p>
+              )}
+              {item.original_answer && (
+                <p className="rounded-md bg-cda-grey-light p-2 text-sm text-cda-text">
+                  <span className="text-xs font-semibold">{who} answered: </span>
+                  {item.original_answer}
+                </p>
+              )}
+              {item.comment && (
+                <p className="rounded-md bg-red-50 p-2 text-sm text-cda-red-dark">
+                  <span className="text-xs font-semibold">Customer said: </span>
+                  {item.comment}
+                </p>
+              )}
+              {item.corrected_answer && (
+                <p className="rounded-md bg-green-50 p-2 text-sm text-green-900">
+                  <span className="text-xs font-semibold">Staff sent instead: </span>
+                  {item.corrected_answer}
+                </p>
+              )}
+              <input
+                value={draft.question}
+                onChange={(event) => setDraft("question", event.target.value)}
+                placeholder="The question, for everyone"
+                className="w-full rounded-lg border border-cda-grey px-3 py-2 text-sm font-semibold"
+              />
+              <textarea
+                value={draft.answer}
+                onChange={(event) => setDraft("answer", event.target.value)}
+                placeholder="The right answer Ellie should give from now on…"
+                rows={3}
+                className="w-full rounded-lg border border-cda-grey px-3 py-2 text-sm"
+              />
+              {unfinished && <p className="text-xs text-cda-red">Replace every [check: …] with the real fact before approving.</p>}
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => void makeGeneral(item, key)}
+                  disabled={busy !== null}
+                  className="rounded-full border border-cda-dark px-4 py-1.5 text-xs font-semibold text-cda-dark disabled:opacity-50"
+                >
+                  {busy === `general-${key}` ? "Claude is writing…" : "✨ Make it a general answer"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void change(`dismiss-${key}`, { action: "dismiss", feedbackIds: [item.id] })}
+                  disabled={busy !== null}
+                  className="rounded-full border border-cda-grey px-4 py-1.5 text-xs font-semibold text-cda-text disabled:opacity-50"
+                >
+                  Dismiss
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void change(
+                      `approve-${key}`,
+                      { action: "approve", question: draft.question, answer: draft.answer, feedbackIds: [item.id] },
+                      "Approved. Ellie uses this answer from her next conversation.",
+                    )
+                  }
+                  disabled={busy !== null || !draft.question.trim() || !draft.answer.trim() || unfinished}
                   className="rounded-full bg-cda-red px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                 >
                   {busy === `approve-${key}` ? "Teaching Ellie…" : "Approve and teach Ellie"}

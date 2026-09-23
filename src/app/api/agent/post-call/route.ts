@@ -1,5 +1,6 @@
 import { hasValidWebhookSignature } from "@/lib/agentAuth";
 import { addNote } from "@/lib/customers";
+import { recordSaidFeedback } from "@/lib/feedback";
 import { recordGaps } from "@/lib/knowledge";
 import { callEnded } from "@/lib/outboundCalls";
 
@@ -44,10 +45,19 @@ export async function POST(request: Request) {
 
   // Questions Ellie could not answer (her "unanswered_question" analysis item) wait on /admin for
   // staff to write the answer. Never fatal: the note below matters more.
-  const unanswered = event.data?.analysis?.data_collection_results?.unanswered_question?.value;
+  const results = event.data?.analysis?.data_collection_results;
+  const unanswered = results?.unanswered_question?.value;
+  const isPhoneCall = Boolean(event.data?.metadata?.phone_call);
   if (event.data?.conversation_id && unanswered) {
-    await recordGaps(event.data.conversation_id, unanswered, Boolean(event.data.metadata?.phone_call)).catch((error) =>
+    await recordGaps(event.data.conversation_id, unanswered, isPhoneCall).catch((error) =>
       console.error("knowledge gap could not be stored", error),
+    );
+  }
+  // What the customer said about Ellie's answers ("that's wrong", "perfect"): the weekly score, and a
+  // complaint waits for staff next to the unanswered questions.
+  if (event.data?.conversation_id) {
+    await recordSaidFeedback(event.data.conversation_id, results, isPhoneCall).catch((error) =>
+      console.error("feedback could not be stored", error),
     );
   }
 

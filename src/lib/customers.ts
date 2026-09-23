@@ -269,6 +269,16 @@ export async function customerForConversation(conversationId: string): Promise<C
   return (Array.isArray(customer) ? customer[0] : customer) ?? null;
 }
 
+/** Which channel a conversation came from, for the admin page. Null when it cannot be told. */
+export async function conversationChannel(conversationId: string, isPhoneCall = false): Promise<string | null> {
+  if (TELEGRAM_CHAT.test(conversationId)) return "telegram";
+  if (isPhoneCall) return "phone";
+  const rows = await rest<{ channel: string | null }[]>(
+    `customer_conversations?conversation_id=eq.${q(conversationId)}&select=channel&limit=1`,
+  );
+  return rows[0]?.channel ?? null;
+}
+
 export async function profileFor(customer: Customer): Promise<Profile> {
   const [channels, notes] = await Promise.all([
     listChannels(customer.id),

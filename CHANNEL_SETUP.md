@@ -537,7 +537,7 @@ open it; `/aida` forwards here). Five tabs, which stay open once visited so a ca
 | 📞 **Aida rooms** | Create, join, close rooms; read and email closed ones (section 9) |
 | 👥 **Customers** | Numbers (customers, accounts, 2+ channels, active this week / now, conversations per channel, email outcomes, open rooms); a searchable list; one customer's channels (✓ verified), activity and timeline |
 | 📲 **Call list** | Phone numbers, each with instructions for Ellie; **Start calling** and she phones them one by one (below) |
-| 📚 **Knowledge** | Questions Ellie could not answer, on every channel; staff write and approve the answer and Ellie uses it from her next conversation (below) |
+| 📚 **Knowledge** | Questions Ellie could not answer and feedback on her answers, on every channel; staff write and approve the right answer and Ellie (and Aida) use it from their next conversation (below) |
 | ✉️ **Email** | Send automatically / Draft for staff, and the latest emails with what happened to each |
 
 **AI insights** (Claude Haiku, `ANTHROPIC_MODEL=claude-haiku-4-5`, only when a staff member clicks,
@@ -569,7 +569,31 @@ On the **📚 Knowledge** tab:
 - **Dismiss** for questions not worth an answer; **Edit / Delete** approved answers; **+ Add an answer
   yourself** without a question behind it. Every change republishes at once
 
-Nothing reaches Ellie without a staff member approving it (`src/lib/knowledge.ts`).
+Nothing reaches Ellie without a staff member approving it (`src/lib/knowledge.ts`). The document is
+attached to **Aida** too, so her drafts for staff give the same approved answers.
+
+### Feedback and corrections (the same loop, 📚 Knowledge → Feedback)
+
+Four sources, all automatic (`src/lib/feedback.ts`, tables `knowledge_feedback` and `feedback_ratings`):
+
+| Source | How it arrives |
+|---|---|
+| 👍 / 👎 in the **website chat** | Under each answer. 👎 asks *"What was wrong?"*. Also sent to ElevenLabs (the conversation's like/dislike). `/api/feedback` |
+| What the customer **says**, any channel | Ellie's analysis items `feedback_sentiment` (positive / negative / none), `feedback_comment`, `feedback_question`, `feedback_answer`, read by the post-call webhook. A chat that used the buttons is not counted twice |
+| **Aida rooms** | When staff send one of Aida's drafts, the server compares what was sent with what Aida wrote (`/api/aida/events`) |
+| **Email draft mode** | Ellie's draft is kept (`email_messages.ellie_reply`). When the Gmail draft is gone, the sent reply in the thread is compared with it, without the quoted email. Checked when staff open 📚 Knowledge and by the daily cron |
+
+- Only a **real correction** counts: a changed number (phone, price, date, model) always does;
+  otherwise at least 6 words and 15% of the text must differ once greeting and sign-off are left out.
+  A new "Dear Mario", "Kind regards, Jean" or a typo does not
+- Every rating counts in the score at the top: *"This week: 12 👍 · 3 👎"*. A 👎, a complaint or a
+  correction waits as a card: the customer's question, Ellie's or Aida's answer, what the customer
+  said or what staff sent instead
+- **✨ Make it a general answer**: Claude Haiku turns the one case into a question and answer for
+  everyone, without that customer's name, order or dates. **Approve and teach Ellie** → CDA approved
+  FAQ, as above. **Dismiss** when Ellie was right
+- Not automatic on purpose: an edit fixes one reply for one customer and often carries their details;
+  making it the answer for everyone is a separate staff decision
 
 ### Call list (Ellie phones customers)
 

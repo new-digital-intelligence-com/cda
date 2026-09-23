@@ -1,4 +1,5 @@
 import { addEvent, cleanText, EMPLOYEE_ONLY_KINDS, EVENT_KINDS, findRoomByLivekitName, listEvents, type EventKind } from "@/lib/aida";
+import { aidaDraftSent } from "@/lib/feedback";
 import { ticketFromRequest } from "@/lib/livekit";
 
 // The record of a room. Each person saves only what they themselves said or decided, so nothing is
@@ -35,5 +36,10 @@ export async function POST(request: Request) {
   if (!text && kind !== "declined") return Response.json({ error: "Nothing to save" }, { status: 400 });
 
   await addEvent(found.room.id, found.ticket, { kind, text: text || null, ref });
+  // Staff sent one of Aida's drafts: if they changed a fact first, that correction waits on /admin
+  // for staff to turn into an approved answer. Never fatal for the room.
+  if (kind === "approved" && ref) {
+    await aidaDraftSent(found.room.id, ref, text).catch((error) => console.error("Aida correction check failed", error));
+  }
   return Response.json({ ok: true });
 }
