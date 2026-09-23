@@ -1,6 +1,7 @@
 import AssistantApp from "@/components/AssistantApp";
 import { AccountPanel } from "@/components/AccountPanel";
 import { ChannelLinks } from "@/components/ChannelLinks";
+import { IntercomMessenger } from "@/components/IntercomMessenger";
 
 const helpTopics = [
   "Product features, dimensions and energy ratings",
@@ -79,6 +80,8 @@ export default function Home() {
           </p>
         </aside>
       </main>
+
+      <IntercomMessenger />
 
       <footer className="mt-auto bg-cda-blue text-white">
         <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-5 text-sm sm:flex-row sm:justify-between">

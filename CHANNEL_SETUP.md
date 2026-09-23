@@ -41,6 +41,7 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
 | Instagram **@new_digital_intelligence** | ✅ | Meta webhook → web app → Custom Channel "CDA Instagram" |
 | Facebook Messenger, Page **New Digital Intelligence** | ✅ | Meta webhook → web app → Custom Channel "CDA Messenger" |
 | Alexa skill **CDA Assistant** (Echo / Alexa app) | ✅ (development) | Amazon → web app → Custom Channel "CDA Alexa" |
+| Intercom chat bubble (on the customer page) | ⏳ Being set up | Intercom → ElevenLabs' native Intercom integration (section 7) |
 | Hosted page / QR code | ✅ | ElevenLabs talk-to link (no password) |
 | Slack | ⏳ | Waiting for a Slack workspace (section 14) |
 | WhatsApp, phone number | ⏸ | Parked (section 14) |
@@ -401,6 +402,32 @@ chat bubble to any website:
 
 > Anyone with this link can talk to Ellie and use credits. Turning on authentication in Ellie's
 > **Security** settings stops the page, QR code and widget; test every channel after such a change.
+
+### Intercom chat bubble
+
+**What the customer does:** clicks the Intercom bubble at the bottom right of the customer page and
+types. Ellie answers in it; staff see the same conversations in Intercom's inbox.
+
+**How it works:** Intercom → ElevenLabs' native **Intercom** integration → Ellie. No code of ours in
+between; the web app only shows the bubble (`src/components/IntercomMessenger.tsx`, App ID
+`zrrcz82c`, public by design). CDA's own website has no chat tool today (checked 23 Sep).
+
+**Set it up from zero**
+1. **intercom.com** → sign up (free trial), workspace `CDA Demo`. Switch **Fin AI Agent** off and
+   disable customer-facing **Workflows**, or two bots answer.
+2. **Settings → Integrations → Developer Hub** → **New app** `ElevenLabs Ellie` → copy the **Access
+   token** (Authentication) and **Client secret** (Basic information).
+3. **Settings → Teammates** → the teammate Ellie posts as → the number in the address is the **Admin ID**.
+4. **ElevenLabs** → Intercom integration → **Connect** with the Access token → **Triggers** →
+   **Intercom Conversation**: agent Ellie, Client secret, Admin ID.
+5. Developer Hub → the app → **Webhooks** → the URL ElevenLabs shows (by default
+   `https://api.elevenlabs.io/v1/convai/api-integrations/intercom/triggers/conversation`), topics
+   `conversation.user.created` and `conversation.user.replied`.
+6. The App ID (in the Intercom address after `/apps/`) goes in `IntercomMessenger.tsx`.
+7. **Test:** bubble → "What's the spare parts phone number?" → **01949 862019**, and it shows in the inbox.
+
+Good to know: photos sent in Intercom are not passed to Ellie. The bubble assumes a US-hosted Intercom
+workspace; an EU one (address `app.eu.intercom.com`) needs `api_base` `https://api-iam.eu.intercom.io`.
 
 ---
 
