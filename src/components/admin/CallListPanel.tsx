@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import PhoneInput, { getCountryCallingCode, isSupportedCountry, type Labels } from "react-phone-number-input";
+import flags from "react-phone-number-input/flags";
+import en from "react-phone-number-input/locale/en";
+import "react-phone-number-input/style.css";
 
 // Staff enter phone numbers with instructions, press Start, and Ellie phones them one by one from
 // the CDA demo line. The server moves a list forward each time this panel asks (every few seconds
@@ -36,6 +40,11 @@ type Row = { key: number; phone: string; name: string; instructions: string };
 const MAX_ATTEMPTS = 3;
 const POLL_MS = 4_000;
 const DEMO_LINE = "+44 7576 593472";
+
+/** "Tunisia +216" in the country list, so the dial code is visible while choosing. */
+const COUNTRY_LABELS: Labels = Object.fromEntries(
+  Object.entries(en).map(([code, name]) => [code, isSupportedCountry(code) ? `${name} +${getCountryCallingCode(code)}` : name]),
+);
 
 let nextKey = 1;
 const emptyRow = (): Row => ({ key: nextKey++, phone: "", name: "", instructions: "" });
@@ -164,12 +173,18 @@ export function CallListPanel({ staffToken, onSignOut }: { staffToken: string; o
           <div key={row.key} className="space-y-2 rounded-lg border border-cda-grey p-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="w-6 text-sm font-semibold text-cda-text">{index + 1}.</span>
-              <input
-                value={row.phone}
-                onChange={(event) => updateRow(row.key, "phone", event.target.value)}
-                placeholder="Phone, e.g. +44 7700 900123"
-                inputMode="tel"
+              {/* Country picker with flag, name and dial code; the value is always +<code><number>. */}
+              <PhoneInput
+                value={row.phone || undefined}
+                onChange={(value) => updateRow(row.key, "phone", value ?? "")}
+                defaultCountry="GB"
+                international
+                countryCallingCodeEditable={false}
+                flags={flags}
+                labels={COUNTRY_LABELS}
+                placeholder="Phone number"
                 className="min-w-0 flex-1 rounded-lg border border-cda-grey px-3 py-2 text-sm"
+                numberInputProps={{ className: "min-w-0 flex-1 bg-transparent outline-none" }}
               />
               <input
                 value={row.name}
