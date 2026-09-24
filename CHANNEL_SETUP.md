@@ -99,7 +99,8 @@ the changed part, then read it back. API changes go live at once; dashboard chan
 answers; *Telegram only* text; *Instagram only* plain text under 900 characters; *Website chat* reads
 images and PDFs; *Email only*: body of one plain-text reply, never asks for the email address, answers
 `SKIP` to robots; *Alexa only*: 1–3 short spoken sentences) · Goal · Knowledge rules (only knowledge-base facts; spare parts delivery: give both
-48 h and 3–5 days; warranty: only current 60-day terms) · Collecting details for repairs · Safety (gas
+48 h and 3–5 days; warranty: only current 60-day terms; registration link always in full, www.registermycda.co.uk, because
+the address without www does not open) · Collecting details for repairs · Safety (gas
 0800 111 999) · Handover to a human · Style (British English) · Operating mode: AGENT (summary of the
 request, never claims something is booked) · Recognising the customer (section 8) · Calls CDA makes to
 customers (outbound calls from the staff call list, section 10).
