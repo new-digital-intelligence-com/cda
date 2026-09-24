@@ -346,3 +346,18 @@ create table if not exists draft_outcomes (
 create index if not exists draft_outcomes_recent_idx on draft_outcomes (created_at desc);
 
 alter table draft_outcomes enable row level security;
+
+-- The CDA appliances a customer has told Ellie about: model, type and purchase date, from the
+-- post-call analysis item "appliance" (a receipt, a photo of the rating plate, or what they said).
+-- customer_lookup gives them back to Ellie on every channel, so she never asks for the model twice.
+create table if not exists customer_appliances (
+  id          bigint generated always as identity primary key,
+  customer_id uuid not null references customers (id) on delete cascade,
+  model       text not null,                   -- e.g. FW952, as on the rating plate
+  description text not null,                   -- e.g. "Fridge freezer FW952, bought 4 August 2026"
+  updated_at  timestamptz not null default now()
+);
+
+create unique index if not exists customer_appliances_once_idx on customer_appliances (customer_id, model);
+
+alter table customer_appliances enable row level security;

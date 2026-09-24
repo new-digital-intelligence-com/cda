@@ -458,7 +458,11 @@ Conversation ends → post-call webhook → one short note (max 400 characters)
   move to the account when they link. **Robots get no record** (no-reply senders; a sender Ellie
   answers `SKIP` to is dropped again if the record holds nothing else)
 - **Stored**: no messages. `customer_conversations` (conversation → customer) and `customer_notes`
-  (one line per conversation). Full transcripts stay in ElevenLabs
+  (one short summary per conversation, up to 700 characters, cut at a sentence). Full transcripts stay in ElevenLabs
+- **Appliances**: Ellie's analysis item `appliance` records the model when it is known (a receipt, a
+  rating plate photo, or what the customer says): *"Fridge freezer FW952, bought 4 August 2026"* →
+  `customer_appliances`. `customer_lookup` returns them as `appliances` on every channel, and her prompt
+  says to use them without asking for the model again. The summaries alone often leave the model out
 
 | Channel | How the person is identified |
 |---|---|

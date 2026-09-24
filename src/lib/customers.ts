@@ -20,7 +20,7 @@ export type Identity = { channel: Channel; key: string; name?: string };
 export type LinkedChannel = { channel: Channel; channel_key: string; verified: boolean };
 
 /** What the agent is told. Deliberately no addresses, order numbers or other personal details. */
-export type Profile = { name: string | null; channels: Channel[]; verified: boolean; recent: string[] };
+export type Profile = { name: string | null; channels: Channel[]; verified: boolean; recent: string[]; appliances: string[] };
 
 export const customerStoreConfigured = supabaseConfigured;
 
@@ -280,17 +280,21 @@ export async function conversationChannel(conversationId: string, isPhoneCall = 
 }
 
 export async function profileFor(customer: Customer): Promise<Profile> {
-  const [channels, notes] = await Promise.all([
+  const [channels, notes, appliances] = await Promise.all([
     listChannels(customer.id),
     rest<{ summary: string }[]>(
       `customer_notes?customer_id=eq.${q(customer.id)}&select=summary&order=created_at.desc&limit=3`,
     ),
+    rest<{ description: string }[]>(
+      `customer_appliances?customer_id=eq.${q(customer.id)}&select=description&order=updated_at.desc&limit=5`,
+    ).catch(() => []),
   ]);
   return {
     name: customer.name,
     channels: [...new Set(channels.map((row) => row.channel as Channel))],
     verified: channels.some((row) => row.verified),
     recent: notes.map((note) => note.summary),
+    appliances: appliances.map((appliance) => appliance.description),
   };
 }
 
@@ -420,6 +424,39 @@ export async function rememberConversation(conversationId: string, customerId: s
 }
 
 /** Returns false when the conversation was never tied to a customer, which is normal. */
+/** A CDA model number as on a rating plate: letters then digits, e.g. FW952, CDI6121, FF881SC. */
+const MODEL = /\b([A-Z]{1,5}\d{2,5}[A-Z0-9]{0,4})\b/;
+
+/**
+ * The appliances from ElevenLabs' post-call analysis ("Fridge freezer FW952, bought 4 August 2026",
+ * several separated by "|"), kept against the customer of that conversation. The newest description
+ * of a model replaces the older one. Returns how many were kept.
+ */
+export async function addAppliances(conversationId: string, value: unknown): Promise<number> {
+  if (typeof value !== "string" || !value.trim()) return 0;
+  const found = value
+    .split("|")
+    .map((part) => part.trim().replace(/\s+/g, " ").slice(0, 200))
+    .map((description) => ({ description, model: description.toUpperCase().match(MODEL)?.[1] }))
+    .filter((item): item is { description: string; model: string } => Boolean(item.model));
+  if (!found.length) return 0;
+  const customer = await customerForConversation(conversationId);
+  if (!customer) return 0;
+  await rest("customer_appliances?on_conflict=customer_id,model", {
+    method: "POST",
+    prefer: "resolution=merge-duplicates,return=minimal",
+    body: JSON.stringify(
+      found.slice(0, 5).map(({ description, model }) => ({
+        customer_id: customer.id,
+        model,
+        description,
+        updated_at: new Date().toISOString(),
+      })),
+    ),
+  });
+  return found.length;
+}
+
 export async function addNote(conversationId: string, summary: string): Promise<boolean> {
   const rows = await rest<{ customer_id: string; channel: string | null }[]>(
     `customer_conversations?conversation_id=eq.${q(conversationId)}&select=customer_id,channel&limit=1`,
