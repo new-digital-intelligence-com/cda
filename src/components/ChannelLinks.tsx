@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
 const SUPPORT_EMAIL = "cda_domestic_appliances@new-digital-intelligence.com";
+/** Ellie's phone line (Twilio, answered by ElevenLabs). */
+const PHONE_LINE = { display: "+44 7576 593472", dial: "+447576593472" };
 
 type Channel = {
   name: string;
@@ -11,6 +13,15 @@ type Channel = {
 };
 
 const channels: Channel[] = [
+  {
+    name: "Phone",
+    detail: `${PHONE_LINE.display} · call Ellie`,
+    href: `tel:${PHONE_LINE.dial}`,
+    iconClassName: "bg-[#16a34a]",
+    icon: (
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    ),
+  },
   {
     name: "Email",
     detail: SUPPORT_EMAIL,
@@ -71,7 +82,7 @@ export function ChannelLinks() {
           <li key={channel.name}>
             <a
               href={channel.href}
-              target="_blank"
+              target={channel.href.startsWith("http") ? "_blank" : undefined}
               rel="noopener noreferrer"
               className="flex items-center gap-3 rounded-lg border border-cda-grey p-2.5 transition hover:border-cda-red hover:bg-cda-grey-light"
             >
