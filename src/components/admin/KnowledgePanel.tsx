@@ -63,6 +63,15 @@ function sourceLabel(item: FeedbackItem): string {
 
 const UNFINISHED = /\[check/i;
 
+type FeedbackTab = "customer" | "aida" | "email";
+
+/** Customer feedback (👎 in the chat, complaints said in any conversation) and the two kinds of staff correction. */
+const FEEDBACK_TABS: { id: FeedbackTab; label: string; sources: FeedbackItem["source"][] }[] = [
+  { id: "customer", label: "💬 Customer feedback", sources: ["chat", "said"] },
+  { id: "aida", label: "📞 Aida corrections", sources: ["aida"] },
+  { id: "email", label: "✉️ Email corrections", sources: ["email"] },
+];
+
 const when = (iso: string) =>
   new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -77,6 +86,7 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [feedbackTab, setFeedbackTab] = useState<FeedbackTab>("customer");
 
   const call = useCallback(
     async (path: string, init: RequestInit = {}) => {
@@ -98,7 +108,16 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
   const load = useCallback(async () => {
     try {
       const body = await call("/api/admin/knowledge");
-      if (body?.gaps && body.faq && body.published) setState(body as State);
+      if (body?.gaps && body.faq && body.published) {
+        const loaded = body as State;
+        setState(loaded);
+        // Open on a tab that has something in it, rather than an empty one.
+        setFeedbackTab((current) => {
+          const has = (tab: FeedbackTab) =>
+            loaded.feedback.some((item) => FEEDBACK_TABS.find((info) => info.id === tab)?.sources.includes(item.source));
+          return has(current) ? current : FEEDBACK_TABS.find((info) => has(info.id))?.id ?? current;
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the knowledge gaps.");
     }
@@ -308,23 +327,57 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
           </span>
         </div>
         <p className="text-xs text-cda-text">
-          👎 from the website chat, complaints customers made in any conversation, and facts staff changed in Aida&apos;s or
-          Ellie&apos;s drafts before sending. Turn one into an answer for everyone, or dismiss it when Ellie was right.
+          Turn one into an answer for everyone, or dismiss it when Ellie was right.
         </p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {[
-            { label: "✉️ Ellie's email drafts", line: draftLine(state.drafts?.email, "discarded") },
-            { label: "📞 Aida's drafts in rooms", line: draftLine(state.drafts?.aida, "declined") },
-          ].map(({ label, line }) => (
-            <div key={label} className="rounded-lg bg-cda-grey-light px-3 py-2 text-xs">
-              <p className="font-semibold text-cda-dark">{label}, this week</p>
-              <p className="text-cda-text">{line ?? "None yet."}</p>
-            </div>
-          ))}
-        </div>
-        {state.feedback.length === 0 && <p className="text-sm text-cda-text">Nothing open.</p>}
 
-        {state.feedback.map((item) => {
+        <div className="flex flex-wrap gap-1 rounded-full bg-cda-grey-light p-1" role="tablist" aria-label="Kinds of feedback">
+          {FEEDBACK_TABS.map((tabInfo) => {
+            const count = state.feedback.filter((item) => tabInfo.sources.includes(item.source)).length;
+            return (
+              <button
+                key={tabInfo.id}
+                type="button"
+                role="tab"
+                aria-selected={feedbackTab === tabInfo.id}
+                onClick={() => setFeedbackTab(tabInfo.id)}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                  feedbackTab === tabInfo.id ? "bg-white text-cda-dark shadow-sm" : "text-cda-text hover:text-cda-dark"
+                }`}
+              >
+                {tabInfo.label} ({count})
+              </button>
+            );
+          })}
+        </div>
+
+        {feedbackTab === "customer" && (
+          <p className="text-xs text-cda-text">👎 under an answer in the website chat, and complaints customers made in any conversation.</p>
+        )}
+        {feedbackTab !== "customer" && (
+          <div className="rounded-lg bg-cda-grey-light px-3 py-2 text-xs">
+            <p className="font-semibold text-cda-dark">
+              {feedbackTab === "aida" ? "📞 Aida's drafts in rooms" : "✉️ Ellie's email drafts"}, this week
+            </p>
+            <p className="text-cda-text">
+              {(feedbackTab === "aida" ? draftLine(state.drafts?.aida, "declined") : draftLine(state.drafts?.email, "discarded")) ??
+                "None yet."}
+            </p>
+            <p className="mt-1 text-cda-text">
+              Only a changed fact makes a card here; a new greeting or a few polite words count as a style edit.
+            </p>
+          </div>
+        )}
+
+        {(() => {
+          const shown = state.feedback.filter((item) =>
+            FEEDBACK_TABS.find((tabInfo) => tabInfo.id === feedbackTab)?.sources.includes(item.source),
+          );
+          return shown.length === 0 ? <p className="text-sm text-cda-text">Nothing open.</p> : null;
+        })()}
+
+        {state.feedback
+          .filter((item) => FEEDBACK_TABS.find((tabInfo) => tabInfo.id === feedbackTab)?.sources.includes(item.source))
+          .map((item) => {
           const key = `f-${item.id}`;
           const draft = drafts[key] ?? {
             question: (item.question ?? "").slice(0, 300),
