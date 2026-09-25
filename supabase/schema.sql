@@ -296,7 +296,7 @@ create table if not exists knowledge_feedback (
   ref              text unique,                 -- where it came from, so it is stored once:
                                                 -- chat:<conversation>:<message>, said:<conversation>,
                                                 -- aida:<room>:<draft>, email:<gmail id>
-  kind             text not null,               -- feedback | correction
+  kind             text not null,               -- feedback | correction (a fact changed) | style (reworded only)
   source           text not null,               -- chat (👎 button) | said (in the conversation) | aida | email
   channel          text,
   conversation_id  text,

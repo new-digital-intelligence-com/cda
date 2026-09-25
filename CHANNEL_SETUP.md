@@ -588,9 +588,10 @@ Four sources, all automatic (`src/lib/feedback.ts`, tables `knowledge_feedback` 
 | **Aida rooms** | When staff send one of Aida's drafts, the server compares what was sent with what Aida wrote (`/api/aida/events`) |
 | **Email draft mode** | Ellie's draft is kept (`email_messages.ellie_reply`). When the Gmail draft is gone, the sent reply in the thread is compared with it, without the quoted email. Checked when staff open 📚 Knowledge and by the daily cron |
 
-- Only a **real correction** counts: a changed number (phone, price, date, model) always does;
-  otherwise at least 6 words and 15% of the text must differ once greeting and sign-off are left out.
-  A new "Dear Mario", "Kind regards, Jean" or a typo does not
+- Every draft staff changed becomes a card, marked **Corrected** (a real correction: a changed number,
+  or at least 6 words and 15% of the text once greeting and sign-off are left out) or **Style only**
+  (reworded: a new "Dear Mario", "Kind regards, Jean", "if you want", a typo), usually just dismissed.
+  The page has three tabs: Customer feedback, Aida corrections, Email corrections
 - **Right first time**: every draft is counted (`draft_outcomes`) as sent unchanged, style edit only,
   corrected, or not sent (declined in a room / email draft discarded), shown per week for Ellie's email
   drafts and Aida's room drafts: *"18 of 20 sent unchanged · 1 style edit · 1 corrected"*

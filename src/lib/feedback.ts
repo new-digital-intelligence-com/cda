@@ -28,7 +28,8 @@ const STAFF_NOTE = /^\s*\[([^\]]+)\]\s*/;
 
 export type FeedbackItem = {
   id: number;
-  kind: "feedback" | "correction";
+  /** feedback from a customer; correction = staff changed a fact; style = staff only reworded the draft. */
+  kind: "feedback" | "correction" | "style";
   source: "chat" | "said" | "aida" | "email";
   channel: string | null;
   conversation_id: string | null;
@@ -221,6 +222,7 @@ export async function recordSaidFeedback(conversationId: string, results: Result
 
 // --- 3 and 4. staff corrections -----------------------------------------------------------------------
 
+/** A draft staff changed before sending: a card, marked as a changed fact or as rewording only. */
 async function recordCorrection(input: {
   ref: string;
   source: "aida" | "email";
@@ -229,11 +231,11 @@ async function recordCorrection(input: {
   question: string | null;
   original: string;
   corrected: string;
+  styleOnly: boolean;
 }): Promise<boolean> {
-  if (!isRealCorrection(input.original, input.corrected)) return false;
   await saveItem({
     ref: input.ref,
-    kind: "correction",
+    kind: input.styleOnly ? "style" : "correction",
     source: input.source,
     channel: input.channel,
     conversation_id: input.conversationId,
@@ -253,7 +255,7 @@ export async function aidaDraftSent(roomId: string, draftRef: string, sent: stri
   const written = draft.text.replace(STAFF_NOTE, "").trim();
   const kind = editKind(written, sent);
   await saveOutcome(`aida:${roomId}:${draftRef}`, "aida", kind);
-  if (kind !== "corrected") return;
+  if (kind === "unchanged") return;
   // What Aida was answering: the customer's last words before her draft.
   const asked = events.filter(
     (event) => event.id < draft.id && event.author_role === "customer" && (event.kind === "speech" || event.kind === "chat"),
@@ -266,6 +268,7 @@ export async function aidaDraftSent(roomId: string, draftRef: string, sent: stri
     question: asked.at(-1)?.text ?? null,
     original: written,
     corrected: sent,
+    styleOnly: kind === "polished",
   });
 }
 
@@ -319,7 +322,7 @@ export async function checkSentDrafts(): Promise<number> {
         const sentText = withoutQuotedHistory(parseGmailMessage(sent).text);
         const kind = editKind(row.ellie_reply, sentText);
         await saveOutcome(`email:${row.gmail_id}`, "email", kind);
-        if (kind === "corrected") {
+        if (kind !== "unchanged") {
           const asked = customerEmail ? withoutQuotedHistory(parseGmailMessage(customerEmail).text) : "";
           const question = [row.subject, asked].filter(Boolean).join(" — ").slice(0, 600);
           if (await recordCorrection({
@@ -330,6 +333,7 @@ export async function checkSentDrafts(): Promise<number> {
             question: question || null,
             original: row.ellie_reply,
             corrected: sentText,
+            styleOnly: kind === "polished",
           })) found++;
         }
       }

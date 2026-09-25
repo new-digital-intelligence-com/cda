@@ -13,7 +13,7 @@ type Published = { document_id: string | null; entries: number; published_at: st
 type Group = { question: string; answer: string; ids: number[] };
 type FeedbackItem = {
   id: number;
-  kind: "feedback" | "correction";
+  kind: "feedback" | "correction" | "style";
   source: "chat" | "said" | "aida" | "email";
   channel: string | null;
   question: string | null;
@@ -57,8 +57,9 @@ const CHANNELS: Record<string, string> = {
 function sourceLabel(item: FeedbackItem): string {
   if (item.source === "chat") return "👎 Website chat";
   if (item.source === "said") return `💬 Said by the customer · ${item.channel ? CHANNELS[item.channel] ?? item.channel : "unknown channel"}`;
-  if (item.source === "aida") return "✏️ Staff corrected Aida's draft";
-  return "✏️ Staff edited Ellie's email draft";
+  const style = item.kind === "style";
+  if (item.source === "aida") return style ? "✏️ Staff reworded Aida's draft · style only" : "✏️ Staff corrected Aida's draft";
+  return style ? "✏️ Staff reworded Ellie's email draft · style only" : "✏️ Staff corrected Ellie's email draft";
 }
 
 const UNFINISHED = /\[check/i;
@@ -363,7 +364,8 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
                 "None yet."}
             </p>
             <p className="mt-1 text-cda-text">
-              Only a changed fact makes a card here; a new greeting or a few polite words count as a style edit.
+              Every draft staff changed is below. <strong>Corrected</strong>: a fact changed, worth teaching Ellie.{" "}
+              <strong>Style only</strong>: just reworded, usually dismissed.
             </p>
           </div>
         )}
@@ -381,7 +383,7 @@ export function KnowledgePanel({ staffToken, onSignOut }: { staffToken: string; 
           const key = `f-${item.id}`;
           const draft = drafts[key] ?? {
             question: (item.question ?? "").slice(0, 300),
-            answer: item.kind === "correction" ? item.corrected_answer ?? "" : "",
+            answer: item.kind !== "feedback" ? item.corrected_answer ?? "" : "",
           };
           const unfinished = UNFINISHED.test(draft.answer);
           const setDraft = (field: "question" | "answer", value: string) =>
