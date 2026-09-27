@@ -78,7 +78,7 @@ Create `.env.local` (git-ignored). Copy the values from **Vercel → project `cd
 | `MESSENGER_PAGE_TOKEN` / `MESSENGER_PAGE_ID` / `MESSENGER_WEBHOOK_SECRET` / `MESSENGER_CHANNEL_*` (3) | Messenger Page token (never expires), Page ID, Meta Callback URL secret, "CDA Messenger" Custom Channel |
 | `ALEXA_SKILL_ID` / `ALEXA_CHANNEL_*` (3) | Alexa skill ID and the "CDA Alexa" Custom Channel |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude Haiku (`claude-haiku-4-5`) for the insights on `/admin` and the email / Aida moods |
-| `STAFF_ALERT_EMAIL` | Optional: who gets the “upset customer” emails (comma-separated). Never the CDA mailbox |
+| `STAFF_ALERT_EMAIL` | Optional: who gets the “upset customer” emails (comma-separated). The CDA mailbox itself is fine (mail from itself is ignored by the email channel) |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project for Aida rooms (server only) |
 | `AIDA_AGENT_ID` | The Aida copilot agent, `agent_2601m31rbrn8emrbfe8vgxgxdta9` |
 | `AIDA_STAFF_PASSWORD` | Aida's own staff password; the site password does **not** make anyone staff |

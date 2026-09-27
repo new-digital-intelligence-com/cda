@@ -44,14 +44,12 @@ type Overview = {
   emails: { checked: number; upset: number };
   aida: { lines: number; frustrated: number };
   alertsOn: boolean;
-  alerts?: { on: true; to: string[] } | { on: false; reason: "mail_not_configured" | "no_address" | "only_cda_mailbox" | "invalid_address" };
+  alerts?: { on: true; to: string[] } | { on: false; reason: "mail_not_configured" | "no_address" | "invalid_address" };
 };
 
 /** Why alerts are off, in words staff can act on. */
 const ALERTS_OFF: Record<string, string> = {
   no_address: "STAFF_ALERT_EMAIL is empty on this deployment: add it on Vercel (Production) and redeploy.",
-  only_cda_mailbox:
-    "STAFF_ALERT_EMAIL is the CDA mailbox itself, which is not allowed (Ellie would answer the alert as a customer email). Use another address and redeploy.",
   invalid_address: "STAFF_ALERT_EMAIL does not look like an email address. Write it plainly (name@example.com; several separated by commas) and redeploy.",
   mail_not_configured: "The mailbox that sends emails (gmail_sender and gmail_app_password) is not set on this deployment.",
 };

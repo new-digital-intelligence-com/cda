@@ -1,8 +1,7 @@
 // Emails CDA staff when a customer is upset, so someone follows up while it still matters.
-// Recipients: STAFF_ALERT_EMAIL (one address, or several separated by commas). Without it nobody is
-// emailed and the conversation simply waits on /admin → 😊 Mood.
+// Recipients: STAFF_ALERT_EMAIL (one address, or several separated by commas; the CDA mailbox itself
+// works too). Without it nobody is emailed and the conversation simply waits on /admin → 😊 Mood.
 
-import { mailboxAddress } from "./gmail";
 import { mailConfigured, sendMail } from "./mailer";
 
 const escapeHtml = (value: string) =>
@@ -34,10 +33,12 @@ function listedAddresses(): string[] {
     .filter(Boolean);
 }
 
-/** Never the CDA mailbox itself: Ellie would read the alert as a customer email. */
+/**
+ * The CDA mailbox itself is fine: the alert is sent from that mailbox, and the email channel ignores
+ * mail from itself and anything marked Sent (src/lib/emailInbox.ts), so Ellie never answers an alert.
+ */
 function recipients(): string[] {
-  const own = mailboxAddress();
-  return listedAddresses().filter((address) => isAddress(address) && address !== own);
+  return listedAddresses().filter(isAddress);
 }
 
 export function moodAlertsConfigured(): boolean {
@@ -46,7 +47,7 @@ export function moodAlertsConfigured(): boolean {
 
 export type MoodAlertStatus =
   | { on: true; to: string[] }
-  | { on: false; reason: "mail_not_configured" | "no_address" | "only_cda_mailbox" | "invalid_address" };
+  | { on: false; reason: "mail_not_configured" | "no_address" | "invalid_address" };
 
 /** "jo***@example.com": enough for staff to recognise the address on the admin page. */
 const masked = (address: string) => address.replace(/^(.{1,2})[^@]*@/, "$1***@");
@@ -58,7 +59,6 @@ export function moodAlertStatus(): MoodAlertStatus {
   if (!mailConfigured()) return { on: false, reason: "mail_not_configured" };
   const listed = listedAddresses();
   if (!listed.length) return { on: false, reason: "no_address" };
-  if (listed.every((address) => address === mailboxAddress())) return { on: false, reason: "only_cda_mailbox" };
   return { on: false, reason: "invalid_address" };
 }
 
