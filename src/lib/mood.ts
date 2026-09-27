@@ -559,6 +559,8 @@ export type FrustratedLine = {
 };
 
 const emptyCounts = (): MoodCounts => ({ total: 0, positive: 0, neutral: 0, negative: 0 });
+/** Every channel of the demo is always listed, even in a period without conversations on it. */
+const DEMO_CHANNELS = ["website", "phone", "email", "telegram", "instagram", "messenger", "alexa", "intercom"];
 const add = (counts: MoodCounts, moodLabel: MoodLabel) => {
   counts.total += 1;
   counts[moodLabel] += 1;
@@ -602,7 +604,9 @@ export async function moodOverview(days: number): Promise<MoodOverview> {
   ]);
 
   const counts = emptyCounts();
-  const channels = new Map<string, MoodCounts & { frustrations: number[] }>();
+  const channels = new Map<string, MoodCounts & { frustrations: number[] }>(
+    DEMO_CHANNELS.map((channel) => [channel, { ...emptyCounts(), frustrations: [] }]),
+  );
   const dayKeys: string[] = [];
   for (let i = days - 1; i >= 0; i--) dayKeys.push(LONDON_DAY.format(new Date(Date.now() - i * 86_400_000)));
   const byDay = new Map(dayKeys.map((date) => [date, emptyCounts()]));
@@ -655,7 +659,8 @@ export async function moodOverview(days: number): Promise<MoodOverview> {
         negative: entry.negative,
         averageFrustration: average(entry.frustrations) ?? 0,
       }))
-      .sort((a, b) => b.total - a.total),
+      // Busiest first; channels without conversations keep the demo's order at the bottom.
+      .sort((a, b) => b.total - a.total || DEMO_CHANNELS.indexOf(a.channel) - DEMO_CHANNELS.indexOf(b.channel)),
     byDay: dayKeys.map((date) => ({ date, ...byDay.get(date)! })),
     unhappy,
     emails: {

@@ -239,7 +239,11 @@ export function MoodPanel({ staffToken, onSignOut }: { staffToken: string; onSig
                       <span className="truncate text-cda-dark">
                         {channelStyle(row.channel).icon} {channelStyle(row.channel).label}
                       </span>
-                      <div className="flex h-4 gap-[2px]" aria-label={`${channelStyle(row.channel).label}: ${ORDER.map((l) => `${row[l]} ${l}`).join(", ")}`}>
+                      <div
+                        className={`flex h-4 gap-[2px] ${row.total === 0 ? "rounded bg-cda-grey-light" : ""}`}
+                        aria-label={`${channelStyle(row.channel).label}: ${row.total === 0 ? "no conversations" : ORDER.map((l) => `${row[l]} ${l}`).join(", ")}`}
+                        title={row.total === 0 ? "No conversations in this period" : undefined}
+                      >
                         {ORDER.filter((label) => row[label] > 0).map((label) => (
                           <div
                             key={label}
@@ -253,7 +257,7 @@ export function MoodPanel({ staffToken, onSignOut }: { staffToken: string; onSig
                         ))}
                       </div>
                       <span className="text-right text-xs text-cda-text" title="Average frustration">
-                        {row.total} · {Math.round(row.averageFrustration * 100)}%
+                        {row.total === 0 ? "0 · –" : `${row.total} · ${Math.round(row.averageFrustration * 100)}%`}
                       </span>
                     </li>
                   ))}
