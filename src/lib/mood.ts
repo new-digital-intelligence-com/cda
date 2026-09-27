@@ -1,9 +1,11 @@
 // Customer mood (sentiment) across every channel.
 //
-// ElevenLabs scores each of Ellie's conversations once it ends: a label, a sentiment score from -1
-// (very negative) to +1, and a frustration score from 0 to 1, overall and for every customer
-// message. The post-call webhook stores them here (conversation_moods) and emails staff when a
-// customer was upset or was promised a follow-up. /admin → 😊 Mood reads them back.
+// ElevenLabs scores each of Ellie's voice and website conversations once it ends: a label, a
+// sentiment score from -1 (very negative) to +1, and a frustration score from 0 to 1, overall and for
+// every customer message. It never scores Custom Channel conversations (email, Instagram, Messenger,
+// Alexa), so Claude rates those the same way, message by message. The post-call webhook stores them
+// here (conversation_moods) and emails staff when a customer was upset or was promised a follow-up.
+// /admin → 😊 Mood reads them back.
 //
 // Emails and Aida rooms are checked earlier, while there is still time to act: Claude rates the
 // incoming email before Ellie answers it, and each customer line in an Aida room as it is said.
@@ -11,6 +13,7 @@
 import { anthropicConfigured, askClaude, parseJsonObject } from "./anthropic";
 import { conversationChannel, customerForConversation } from "./customers";
 import { elevenLabsGet } from "./elevenlabs";
+import { mailboxAddress } from "./gmail";
 import { sendMoodAlert } from "./moodAlert";
 import { embedded, supabaseRest as rest } from "./supabase";
 
@@ -99,8 +102,20 @@ function label(value: unknown, score: number): MoodLabel {
   return score > 0.2 ? "positive" : score < -0.2 ? "negative" : "neutral";
 }
 
+/**
+ * What the customer wrote, without what the web app put around it for Ellie: the email header
+ * ("[Email to CDA customer care]", From, Subject) and Alexa's "[Alexa]" marker.
+ */
+function customerWords(text: string | null | undefined): string {
+  let clean = (text ?? "").trim().replace(/^\[Alexa\]\s*/i, "");
+  if (clean.startsWith("[Email to CDA customer care]")) {
+    clean = clean.replace(/^\[Email to CDA customer care\]\s*/, "").replace(/^(From|Subject):[^\n]*\n?/gim, "");
+  }
+  return clean.trim();
+}
+
 function excerpt(text: string | null | undefined): string {
-  const clean = (text ?? "").replace(/\s+/g, " ").trim();
+  const clean = customerWords(text).replace(/\s+/g, " ").trim();
   return clean.length > EXCERPT_LENGTH ? `${clean.slice(0, EXCERPT_LENGTH - 1)}…` : clean;
 }
 
@@ -169,8 +184,13 @@ async function channelOf(record: ConversationForMood, conversationId: string): P
   const known = await conversationChannel(conversationId, isPhone).catch(() => null);
   if (known) return known;
   const source = record.conversation_initiation_source ?? record.metadata?.conversation_initiation_source ?? "";
+  if (/_fd_\d+$/.test(conversationId) || /freshdesk/i.test(source)) return "email"; // email before the switch to Gmail
+  if (/_ic_\d+$/.test(conversationId) || /intercom/i.test(source)) return "intercom";
+  if (/telegram/i.test(source)) return "telegram";
   if (/twilio|sip|phone/i.test(source)) return "phone";
-  if (/react|js_sdk|widget|web/i.test(source)) return "website";
+  // react_sdk / js_sdk: chat and voice on the site, the widget and the hosted page; python_sdk: the
+  // video avatar (Anam's servers connect to Ellie on the customer's behalf).
+  if (/react|js_sdk|widget|web|python_sdk/i.test(source)) return "website";
   if (/custom_channel/i.test(source)) {
     const byTrigger = channelOfTrigger(record.metadata?.async_metadata?.external_id);
     if (byTrigger) return byTrigger;
@@ -182,14 +202,97 @@ async function channelOf(record: ConversationForMood, conversationId: string): P
   return null;
 }
 
+const RATE_CONVERSATION = `You rate how a customer felt in a conversation with Ellie, the virtual assistant of CDA, a UK kitchen appliance brand.
+You get the customer's messages only, numbered, in order. Answer with JSON only:
+{"messages":[{"score":<-1 to 1>,"frustration":<0 to 1>}, one per message in the same order],
+ "overall":{"label":"positive|neutral|negative","score":<-1 to 1>,"frustration":<0 to 1>},
+ "title":"<3 to 6 words>","summary":"<one short sentence in English: what the customer wanted>"}
+- score: -1 very unhappy or angry, 0 neutral, +1 very happy or grateful.
+- frustration: 0 calm, 1 furious. Count anger, impatience, distress, threats to complain or leave, repeated chasing, sarcasm.
+- A plain question or request, however urgent the problem, is neutral: score near 0, frustration at most 0.2.
+- Messages can be in any language, and an email may start with a small header (From, Subject). Rate the customer, not the appliance.`;
+
+const MAX_RATED_MESSAGES = 20;
+
 /**
- * Stores the mood of one conversation of Ellie's. With `alert`, staff are emailed (once) when the
- * customer was upset or was promised a follow-up. Returns the stored mood, or null if there was none.
+ * Claude's rating of a conversation ElevenLabs did not score (every Custom Channel: email, Instagram,
+ * Messenger, Alexa), in the same shape as ElevenLabs' own. Null without customer messages or Claude.
+ */
+async function moodFromClaude(record: ConversationForMood): Promise<MoodRow | null> {
+  const conversationId = record.conversation_id;
+  const messages = (record.transcript ?? [])
+    .filter((turn) => turn.role === "user" && turn.message?.trim())
+    .slice(0, MAX_RATED_MESSAGES);
+  if (!conversationId || !messages.length || !anthropicConfigured()) return null;
+
+  type Answer = {
+    messages?: { score?: unknown; frustration?: unknown }[];
+    overall?: { label?: unknown; score?: unknown; frustration?: unknown };
+    title?: unknown;
+    summary?: unknown;
+  };
+  let answer: Answer | null = null;
+  try {
+    answer = parseJsonObject<Answer>(
+      await askClaude({
+        system: RATE_CONVERSATION,
+        prompt: messages.map((turn, index) => `${index + 1}. ${turn.message!.trim().slice(0, 800)}`).join("\n\n"),
+        maxTokens: 700,
+        timeoutMs: 20_000,
+      }),
+    );
+  } catch (error) {
+    console.error("Claude could not rate the conversation", conversationId, error);
+    return null;
+  }
+  if (!answer?.overall) return null;
+
+  const turns: MoodTurn[] = messages.map((turn, index) => ({
+    at: Math.round(turn.time_in_call_secs ?? 0),
+    excerpt: excerpt(turn.message),
+    score: clamp(num(answer!.messages?.[index]?.score) ?? 0, -1, 1),
+    frustration: clamp(num(answer!.messages?.[index]?.frustration) ?? 0, 0, 1),
+  }));
+  const score = clamp(num(answer.overall.score) ?? 0, -1, 1);
+  const low = [...turns].sort((a, b) => a.score - b.score || b.frustration - a.frustration)[0];
+  const startedAt = record.metadata?.start_time_unix_secs;
+  return {
+    conversation_id: conversationId,
+    label: label(answer.overall.label, score),
+    score,
+    frustration: clamp(num(answer.overall.frustration) ?? 0, 0, 1),
+    min_score: turns.length ? Math.min(...turns.map((turn) => turn.score)) : null,
+    max_frustration: turns.length ? Math.max(...turns.map((turn) => turn.frustration)) : null,
+    turns,
+    low_point: low && low.score < 0 ? low.excerpt : null,
+    title: record.analysis?.call_summary_title?.trim() || (typeof answer.title === "string" ? answer.title.slice(0, 80) : null),
+    summary: record.analysis?.transcript_summary?.trim() || (typeof answer.summary === "string" ? answer.summary.slice(0, 400) : null),
+    follow_up: followUpAsked(record.analysis?.data_collection_results),
+    started_at: new Date(startedAt ? startedAt * 1000 : Date.now()).toISOString(),
+  };
+}
+
+async function storedMoodExists(conversationId: string): Promise<boolean> {
+  const rows = await rest<{ conversation_id: string }[]>(
+    `conversation_moods?conversation_id=eq.${q(conversationId)}&select=conversation_id&limit=1`,
+  ).catch(() => []);
+  return rows.length > 0;
+}
+
+/**
+ * Stores the mood of one conversation of Ellie's: ElevenLabs' scores, or Claude's rating when
+ * ElevenLabs gave none. With `alert`, staff are emailed (once) when the customer was upset or was
+ * promised a follow-up. Returns the stored mood, or null if there was none.
  */
 export async function recordConversationMood(record: ConversationForMood, { alert }: { alert: boolean }) {
   const ellie = process.env.ELEVENLABS_AGENT_ID;
   if (record.agent_id && ellie && record.agent_id !== ellie) return null; // not one of Ellie's conversations
-  const mood = moodFromConversation(record);
+  let mood = moodFromConversation(record);
+  if (!mood && record.conversation_id) {
+    // An email already has Claude's rating from when it arrived: never rate it twice.
+    if (await storedMoodExists(record.conversation_id)) return null;
+    mood = await moodFromClaude(record);
+  }
   if (!mood) return null;
 
   const [customer, channel] = await Promise.all([
@@ -205,7 +308,8 @@ export async function recordConversationMood(record: ConversationForMood, { aler
 
   const worthAlert = isUpset({ score: mood.score, frustration: mood.frustration, maxFrustration: mood.max_frustration }) || mood.follow_up;
   const recent = Date.now() - new Date(mood.started_at).getTime() < ALERT_MAX_AGE_MS;
-  if (alert && worthAlert && recent) {
+  // An upset email alerts staff from the email flow, with the email's own details (src/lib/emailInbox.ts).
+  if (alert && worthAlert && recent && channel !== "email") {
     await alertOnce(mood.conversation_id, async () =>
       sendMoodAlert({
         kind: "conversation",
@@ -246,6 +350,50 @@ async function alertOnce(conversationId: string, send: () => Promise<boolean>) {
   }
 }
 
+/**
+ * An email's mood, from Claude's rating when it arrived: stored at once, so an upset email is on the
+ * Mood tab straight away (ElevenLabs never scores email conversations).
+ */
+export async function recordEmailMood(input: {
+  conversationId: string;
+  customerId: string | null;
+  subject: string;
+  text: string;
+  receivedAt: Date;
+  mood: QuickMood;
+}) {
+  const turn: MoodTurn = { at: 0, excerpt: excerpt(input.text), score: input.mood.score, frustration: input.mood.frustration };
+  await rest("conversation_moods?on_conflict=conversation_id", {
+    method: "POST",
+    prefer: "resolution=merge-duplicates,return=minimal",
+    body: JSON.stringify({
+      conversation_id: input.conversationId,
+      customer_id: input.customerId,
+      channel: "email",
+      label: input.mood.label,
+      score: input.mood.score,
+      frustration: input.mood.frustration,
+      min_score: input.mood.score,
+      max_frustration: input.mood.frustration,
+      turns: [turn],
+      low_point: input.mood.score < 0 ? turn.excerpt : null,
+      title: input.subject.slice(0, 120) || "(no subject)",
+      summary: input.mood.reason || null,
+      follow_up: false,
+      started_at: input.receivedAt.toISOString(),
+    }),
+  });
+}
+
+/** Staff were emailed about this conversation (shown as "Staff emailed" on the Mood tab). */
+export async function markAlerted(conversationId: string) {
+  await rest(`conversation_moods?conversation_id=eq.${q(conversationId)}&alerted_at=is.null`, {
+    method: "PATCH",
+    prefer: "return=minimal",
+    body: JSON.stringify({ alerted_at: new Date().toISOString() }),
+  });
+}
+
 // --- filling in what the webhook missed ------------------------------------------------------------
 
 type ListedConversation = { conversation_id: string; status?: string; start_time_unix_secs?: number };
@@ -275,8 +423,11 @@ export async function importMoods({ days = 30, max = 150 }: { days?: number; max
   const have = new Set<string>();
   for (let i = 0; i < candidates.length; i += 50) {
     const ids = candidates.slice(i, i + 50).map((c) => `"${c.conversation_id}"`).join(",");
-    const rows = await rest<{ conversation_id: string }[]>(`conversation_moods?conversation_id=in.(${q(ids)})&select=conversation_id`);
-    rows.forEach((row) => have.add(row.conversation_id));
+    const rows = await rest<{ conversation_id: string; channel: string | null }[]>(
+      `conversation_moods?conversation_id=in.(${q(ids)})&select=conversation_id,channel`,
+    );
+    // A row stored without a channel is done again, so it gets one (the scores are simply rewritten).
+    rows.filter((row) => row.channel).forEach((row) => have.add(row.conversation_id));
   }
   const missing = candidates.filter((c) => !have.has(c.conversation_id));
 
@@ -384,8 +535,27 @@ export type MoodOverview = {
   byChannel: (MoodCounts & { channel: string; averageFrustration: number })[];
   byDay: (MoodCounts & { date: string })[];
   unhappy: UnhappyConversation[];
-  emails: { checked: number; upset: number };
-  aida: { lines: number; frustrated: number };
+  emails: { checked: number; upset: number; mailbox: string | null; items: UpsetEmail[] };
+  aida: { lines: number; frustrated: number; items: FrustratedLine[] };
+};
+
+export type UpsetEmail = {
+  threadId: string;
+  from: string | null;
+  subject: string | null;
+  reason: string | null;
+  frustration: number;
+  status: string;
+  receivedAt: string;
+};
+
+export type FrustratedLine = {
+  roomCode: string | null;
+  roomTitle: string | null;
+  excerpt: string | null;
+  label: MoodLabel;
+  frustration: number;
+  at: string;
 };
 
 const emptyCounts = (): MoodCounts => ({ total: 0, positive: 0, neutral: 0, negative: 0 });
@@ -402,11 +572,32 @@ export async function moodOverview(days: number): Promise<MoodOverview> {
     rest<StoredMood[]>(
       `conversation_moods?started_at=gte.${q(since)}&select=*,customers(name)&order=started_at.desc&limit=5000`,
     ),
-    rest<{ mood_label: string | null; mood_frustration: number | null }[]>(
-      `email_messages?created_at=gte.${q(since)}&mood_label=not.is.null&select=mood_label,mood_frustration&limit=5000`,
+    rest<
+      {
+        thread_id: string;
+        from_name: string | null;
+        from_email: string | null;
+        subject: string | null;
+        status: string;
+        mood_label: string | null;
+        mood_frustration: number | null;
+        mood_reason: string | null;
+        created_at: string;
+      }[]
+    >(
+      `email_messages?created_at=gte.${q(since)}&mood_label=not.is.null&select=thread_id,from_name,from_email,subject,status,mood_label,mood_frustration,mood_reason,created_at&order=created_at.desc&limit=5000`,
     ).catch(() => []),
-    rest<{ frustration: number; score: number }[]>(
-      `aida_moods?created_at=gte.${q(since)}&select=frustration,score&limit=5000`,
+    rest<
+      {
+        frustration: number;
+        score: number;
+        label: MoodLabel;
+        excerpt: string | null;
+        created_at: string;
+        aida_rooms?: { code: string; title: string | null } | { code: string; title: string | null }[] | null;
+      }[]
+    >(
+      `aida_moods?created_at=gte.${q(since)}&select=frustration,score,label,excerpt,created_at,aida_rooms(code,title)&order=created_at.desc&limit=5000`,
     ).catch(() => []),
   ]);
 
@@ -470,10 +661,37 @@ export async function moodOverview(days: number): Promise<MoodOverview> {
     emails: {
       checked: emails.length,
       upset: emails.filter((email) => isUpsetEmail(email.mood_frustration)).length,
+      mailbox: mailboxAddress(),
+      items: emails
+        .filter((email) => isUpsetEmail(email.mood_frustration))
+        .slice(0, 15)
+        .map((email) => ({
+          threadId: email.thread_id,
+          from: email.from_name || email.from_email,
+          subject: email.subject,
+          reason: email.mood_reason,
+          frustration: email.mood_frustration ?? 0,
+          status: email.status,
+          receivedAt: email.created_at,
+        })),
     },
     aida: {
       lines: aidaLines.length,
       frustrated: aidaLines.filter((line) => line.frustration >= UPSET_FRUSTRATION || line.score <= UPSET_SCORE).length,
+      items: aidaLines
+        .filter((line) => line.frustration >= UPSET_FRUSTRATION || line.score <= UPSET_SCORE)
+        .slice(0, 15)
+        .map((line) => {
+          const room = embedded(line.aida_rooms);
+          return {
+            roomCode: room ? `${room.code.slice(0, 3)}-${room.code.slice(3)}` : null,
+            roomTitle: room?.title ?? null,
+            excerpt: line.excerpt,
+            label: line.label,
+            frustration: line.frustration,
+            at: line.created_at,
+          };
+        }),
     },
   };
 }

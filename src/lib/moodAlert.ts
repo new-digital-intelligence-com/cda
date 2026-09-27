@@ -17,6 +17,7 @@ const CHANNEL_NAMES: Record<string, string> = {
   alexa: "Alexa",
   slack: "Slack",
   messaging: "Messaging app",
+  intercom: "Intercom",
 };
 
 export function channelName(channel: string | null | undefined): string {

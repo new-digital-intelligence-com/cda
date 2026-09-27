@@ -70,6 +70,7 @@ const CHANNEL_STYLE: Record<string, { icon: string; label: string; className: st
   website: { icon: "🌐", label: "Website", className: "bg-cda-grey text-cda-dark" },
   slack: { icon: "#", label: "Slack", className: "bg-purple-50 text-purple-800" },
   messaging: { icon: "💬", label: "Messaging app", className: "bg-cda-grey text-cda-dark" },
+  intercom: { icon: "◌", label: "Intercom", className: "bg-indigo-50 text-indigo-800" },
 };
 export const channelStyle = (channel: string | null) =>
   CHANNEL_STYLE[channel ?? ""] ?? { icon: "•", label: channel ?? "unknown", className: "bg-cda-grey text-cda-dark" };

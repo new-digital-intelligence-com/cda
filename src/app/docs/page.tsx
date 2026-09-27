@@ -386,7 +386,7 @@ End of every conversation   → post-call webhook  → one short note, the appli
             <Table
               head={["Part", "What it does"]}
               rows={[
-                ["1. Measured mood", "ElevenLabs scores every conversation with Ellie when it ends: a label (positive, neutral, negative), sentiment from −1 to +1 and frustration from 0 to 100%, overall and for each customer message. The scores are saved with the channel and the customer."],
+                ["1. Measured mood", "ElevenLabs scores every voice and website conversation with Ellie when it ends: a label (positive, neutral, negative), sentiment from −1 to +1 and frustration from 0 to 100%, overall and for each customer message. It does not score email, Instagram, Messenger or Alexa, so Claude rates those the same way, message by message. The scores are saved with the channel and the customer."],
                 ["2. Staff alerts", "When a customer was upset, or Ellie promised that the CDA team will get back to them, staff get an email within a minute: who, which channel, the summary and the exact message where the mood turned."],
                 ["3. Live mood in Aida rooms", "Claude rates each customer line as it is said (about a second). Staff see a mood dot on every line and a mood meter; when the customer is frustrated, Aida is told before she drafts, so her draft opens with an apology and offers to escalate."],
                 ["4. Upset emails", "Claude rates each incoming email before Ellie sees it. An upset customer is never answered automatically: Ellie's answer waits as a Gmail draft labelled “Ellie/Upset customer”, and staff are alerted."],
@@ -398,9 +398,9 @@ End of every conversation   → post-call webhook  → one short note, the appli
               items={[
                 "The share of positive, neutral and negative conversations and the average frustration, for 7 or 30 days.",
                 "Mood by channel, and conversations per day.",
-                "How many emails were checked and held as drafts, and how many Aida lines were rated frustrated.",
+                "The upset emails (sender, subject, why, Open in Gmail) and the frustrated lines in Aida rooms, listed one by one.",
                 "Unhappy conversations: frustration of 60% or more, a very negative moment, or a promised follow-up. Each shows the customer, the channel, the message where it turned, a small mood curve and a Mark followed up button.",
-                "Import past conversations fills in the last 30 days (reading them from ElevenLabs costs nothing); a daily job catches any the webhook missed.",
+                "Import past conversations fills in the last 30 days; opening the tab and a daily job bring in new ones (reading from ElevenLabs is free, Claude's rating costs a fraction of a cent).",
               ]}
             />
             <P>

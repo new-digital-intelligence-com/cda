@@ -41,8 +41,17 @@ type Overview = {
   byChannel: (Counts & { channel: string; averageFrustration: number })[];
   byDay: (Counts & { date: string })[];
   unhappy: Unhappy[];
-  emails: { checked: number; upset: number };
-  aida: { lines: number; frustrated: number };
+  emails: {
+    checked: number;
+    upset: number;
+    mailbox: string | null;
+    items: { threadId: string; from: string | null; subject: string | null; reason: string | null; frustration: number; status: string; receivedAt: string }[];
+  };
+  aida: {
+    lines: number;
+    frustrated: number;
+    items: { roomCode: string | null; roomTitle: string | null; excerpt: string | null; label: Label; frustration: number; at: string }[];
+  };
   alertsOn: boolean;
   alerts?: { on: true; to: string[] } | { on: false; reason: "mail_not_configured" | "no_address" | "invalid_address" };
 };
@@ -59,6 +68,17 @@ const WORD: Record<Label, string> = { positive: "Positive", neutral: "Neutral", 
 const ORDER: Label[] = ["positive", "neutral", "negative"];
 
 const pct = (part: number, total: number) => (total ? Math.round((part / total) * 100) : 0);
+
+/** What happened to an upset email, in staff words. */
+const EMAIL_STATUS: Record<string, string> = {
+  draft: "Draft waiting in Gmail",
+  sent: "Replied",
+  skipped: "Skipped",
+  failed: "Failed",
+  new: "Ellie writing",
+  waiting: "Ellie writing",
+  replying: "Ellie writing",
+};
 const when = (iso: string) =>
   new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString([], { day: "numeric", month: "short" });
@@ -248,7 +268,7 @@ export function MoodPanel({ staffToken, onSignOut }: { staffToken: string; onSig
             </div>
           )}
 
-          <section className="grid gap-3 sm:grid-cols-2">
+          <section className="grid gap-3 lg:grid-cols-2">
             <div className="rounded-xl bg-white p-4 shadow-sm">
               <p className="text-sm font-semibold text-cda-dark">✉️ Emails checked before Ellie answered</p>
               <p className="mt-1 text-sm text-cda-dark">
@@ -257,6 +277,32 @@ export function MoodPanel({ staffToken, onSignOut }: { staffToken: string; onSig
               <p className="mt-1 text-xs text-cda-text">
                 An upset email is never answered automatically: Ellie leaves a Gmail draft labelled “Ellie/Upset customer”.
               </p>
+              {data.emails.items.length > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {data.emails.items.map((email) => (
+                    <li key={`${email.threadId}-${email.receivedAt}`} className="rounded-lg bg-cda-grey-light px-3 py-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 truncate text-sm font-semibold text-cda-dark">{email.from ?? "Unknown sender"}</span>
+                        <span className="shrink-0 text-[11px] text-cda-text">{when(email.receivedAt)}</span>
+                      </div>
+                      <p className="truncate text-xs text-cda-dark">{email.subject || "(no subject)"}</p>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-cda-text">
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: COLOR.negative }} aria-hidden="true" />
+                        Frustration {Math.round(email.frustration * 100)}%{email.reason ? ` · ${email.reason}` : ""} ·{" "}
+                        {EMAIL_STATUS[email.status] ?? email.status} ·{" "}
+                        <a
+                          href={`https://mail.google.com/mail/?authuser=${encodeURIComponent(data.emails.mailbox ?? "")}#all/${email.threadId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          Open in Gmail
+                        </a>
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="rounded-xl bg-white p-4 shadow-sm">
               <p className="text-sm font-semibold text-cda-dark">📞 Aida calls, live</p>
@@ -266,6 +312,26 @@ export function MoodPanel({ staffToken, onSignOut }: { staffToken: string; onSig
               <p className="mt-1 text-xs text-cda-text">
                 Staff see the mood of each line in the room; when the customer is frustrated, Aida’s next draft opens with an apology.
               </p>
+              {data.aida.items.length > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {data.aida.items.map((line, index) => (
+                    <li key={`${line.at}-${index}`} className="rounded-lg bg-cda-grey-light px-3 py-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 truncate text-sm font-semibold text-cda-dark">
+                          {line.roomTitle ?? "Aida room"}
+                          {line.roomCode ? <span className="font-normal text-cda-text"> · room {line.roomCode}</span> : null}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-cda-text">{when(line.at)}</span>
+                      </div>
+                      {line.excerpt && <p className="text-xs text-cda-dark">“{line.excerpt}”</p>}
+                      <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-cda-text">
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: COLOR[line.label] }} aria-hidden="true" />
+                        {WORD[line.label]}, frustration {Math.round(line.frustration * 100)}%
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </section>
 

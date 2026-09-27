@@ -16,7 +16,7 @@
 import { customerForChannel, forgetRobotSender, rememberConversation } from "./customers";
 import { getEmailMode } from "./emailMode";
 import { withoutQuotedHistory } from "./feedback";
-import { isUpsetEmail, rateMessage } from "./mood";
+import { isUpsetEmail, markAlerted, rateMessage, recordEmailMood, type QuickMood } from "./mood";
 import { sendMoodAlert } from "./moodAlert";
 import { automatedReason, buildReply, isSkip, parseGmailMessage, plainReply, replySubject, textForEllie, type IncomingEmail } from "./emailParse";
 import {
@@ -227,18 +227,19 @@ async function sendToEllie(email: IncomingEmail): Promise<string> {
 }
 
 /** Claude's rating of the email, kept on its row. A missing rating simply means "not upset". */
-async function rateEmail(email: IncomingEmail) {
+async function rateEmail(email: IncomingEmail): Promise<QuickMood | null> {
   const mood = await rateMessage(`Subject: ${email.subject || "(no subject)"}
 
 ${withoutQuotedHistory(email.text)}`, {
     timeoutMs: 12_000,
   });
-  if (!mood) return;
+  if (!mood) return null;
   await rest(`email_messages?gmail_id=eq.${q(email.gmailId)}`, {
     method: "PATCH",
     prefer: "return=minimal",
     body: JSON.stringify({ mood_label: mood.label, mood_frustration: mood.frustration, mood_reason: mood.reason || null }),
   }).catch((error) => console.error("email mood not stored (has supabase/schema.sql been run?)", error));
+  return mood;
 }
 
 async function handleIncoming(gmailId: string) {
@@ -263,7 +264,7 @@ async function handleIncoming(gmailId: string) {
   }
 
   // Its mood, before Ellie sees it: an upset customer is never answered automatically (😊 Mood).
-  await rateEmail(email);
+  const mood = await rateEmail(email);
 
   // The sender's customer record comes first, so the conversation can be tied to it the moment
   // ElevenLabs names it: Ellie's customer_lookup runs a second or so later and finds it. Receiving
@@ -295,6 +296,17 @@ async function handleIncoming(gmailId: string) {
       body: JSON.stringify({ conversation_id: conversationId, updated_at: new Date().toISOString() }),
     }),
     customer ? rememberConversation(conversationId, customer.id, "email") : Promise.resolve(),
+    // On the Mood tab at once: ElevenLabs never scores email conversations.
+    mood
+      ? recordEmailMood({
+          conversationId,
+          customerId: customer?.id ?? null,
+          subject: email.subject,
+          text: withoutQuotedHistory(email.text),
+          receivedAt: email.receivedAt,
+          mood,
+        }).catch((error) => console.error("email mood not added to the Mood tab", error))
+      : Promise.resolve(),
   ]);
 }
 
@@ -415,7 +427,7 @@ export async function handleEllieReply(payload: ReplyWebhook): Promise<{ outcome
 /** An upset customer's email: labelled for staff in Gmail, and staff are emailed. Never fatal. */
 async function flagUpset(row: EmailRow) {
   await labelUpset(row.gmail_id).catch((error) => console.error("upset label not added", error));
-  await sendMoodAlert({
+  const sent = await sendMoodAlert({
     kind: "email",
     fromName: row.from_name,
     fromEmail: row.from_email,
@@ -423,7 +435,13 @@ async function flagUpset(row: EmailRow) {
     when: new Date(row.received_at ?? row.created_at),
     frustration: row.mood_frustration ?? 0,
     reason: row.mood_reason ?? "",
-  }).catch((error) => console.error("upset email alert not sent", error));
+  }).catch((error) => {
+    console.error("upset email alert not sent", error);
+    return false;
+  });
+  if (sent && row.conversation_id) {
+    await markAlerted(row.conversation_id).catch((error) => console.error("could not mark the email alerted", error));
+  }
 }
 
 // --- for the staff page ------------------------------------------------------------------------
