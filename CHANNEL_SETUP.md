@@ -1,7 +1,8 @@
 # CDA Multi-Channel Assistant (Demo) – Setup Guide
 
 Demo built by **NDI (New Digital Intelligence)** for **CDA** (UK kitchen appliance brand, www.cda.co.uk).
-Not an official CDA service. Last updated: **21 September 2026**.
+Not an official CDA service. Last updated: **27 September 2026**.
+A public, plain-words version of this guide is at **https://cda-demo.vercel.app/docs** (no password, no secrets).
 
 > **This repository is public. No secrets in this file.** Keys and tokens live in the tools themselves,
 > in Vercel and in `.env.local` — see [Credentials](#12-credentials).
@@ -17,7 +18,7 @@ Not an official CDA service. Last updated: **21 September 2026**.
 7. [Website](#7-website)
 8. [Customer memory across channels](#8-customer-memory-across-channels)
 9. [Aida rooms](#9-aida-rooms)
-10. [Admin page](#10-admin-page)
+10. [Admin page](#10-admin-page) (incl. [Customer mood](#customer-mood-sentiment-admin--mood))
 11. [Web app reference](#11-web-app-reference)
 12. [Credentials](#12-credentials)
 13. [Maintenance](#13-maintenance)
@@ -36,6 +37,7 @@ Aida rooms (live calls where the second agent, Aida, drafts answers for staff).
 |---|---|---|
 | Website https://cda-demo.vercel.app | ✅ | Next.js app on Vercel, site password: Chat, Voice, Avatar, Aida |
 | Admin https://cda-demo.vercel.app/admin | ✅ | Staff page, Aida staff password |
+| Docs https://cda-demo.vercel.app/docs | ✅ | Public documentation page, no password (`src/app/docs/page.tsx`) |
 | Telegram **@CDA_2026_Support_Bot** | ✅ | Native ElevenLabs Telegram trigger |
 | Email **cda_domestic_appliances@new-digital-intelligence.com** | ✅ | Gmail push → web app → Custom Channel "CDA email" |
 | Instagram **@new_digital_intelligence** | ✅ | Meta webhook → web app → Custom Channel "CDA Instagram" |
@@ -103,7 +105,8 @@ images and PDFs; *Email only*: body of one plain-text reply, never asks for the 
 the address without www does not open) · Collecting details for repairs · Safety (gas
 0800 111 999) · Handover to a human · Style (British English) · Operating mode: AGENT (summary of the
 request, never claims something is booked) · Recognising the customer (section 8) · Calls CDA makes to
-customers (outbound calls from the staff call list, section 10).
+customers (outbound calls from the staff call list, section 10) · When the customer is upset (apologise once,
+slow down, offer a person; section 10, Customer mood).
 
 ### Knowledge base
 
@@ -535,12 +538,13 @@ Costs: LiveKit Cloud free "Build" plan (5,000 participant-minutes a month; proje
 ## 10. Admin page
 
 `https://cda-demo.vercel.app/admin` — staff only, **Aida staff password** (the site password does not
-open it; `/aida` forwards here). Five tabs, which stay open once visited so a call is never dropped:
+open it; `/aida` forwards here). Six tabs, which stay open once visited so a call is never dropped:
 
 | Tab | What staff do |
 |---|---|
 | 📞 **Aida rooms** | Create, join, close rooms; read and email closed ones (section 9) |
 | 👥 **Customers** | Numbers (customers, accounts, 2+ channels, active this week / now, conversations per channel, email outcomes, open rooms); a searchable list; one customer's channels (✓ verified), activity and timeline |
+| 😊 **Mood** | How customers felt on every channel (7 / 30 days), and the unhappy conversations to follow up (below) |
 | 📲 **Call list** | Phone numbers, each with instructions for Ellie; **Start calling** and she phones them one by one (below) |
 | 📚 **Knowledge** | Questions Ellie could not answer and feedback on her answers, on every channel; staff write and approve the right answer and Ellie (and Aida) use it from their next conversation (below) |
 | ✉️ **Email** | Send automatically / Draft for staff, and the latest emails with what happened to each |
@@ -604,6 +608,27 @@ Four sources, all automatic (`src/lib/feedback.ts`, tables `knowledge_feedback` 
 - Not automatic on purpose: an edit fixes one reply for one customer and often carries their details;
   making it the answer for everyone is a separate staff decision
 
+### Customer mood (sentiment, /admin → 😊 Mood)
+
+Five parts (`src/lib/mood.ts`, `src/lib/moodAlert.ts`; tables `conversation_moods`, `aida_moods`, and
+`email_messages.mood_*`):
+
+| Part | How it works |
+|---|---|
+| **Measured mood** | ElevenLabs' built-in sentiment analysis (on for Ellie) scores every conversation: label, sentiment −1…+1, frustration 0…1, overall and per customer message. The post-call webhook stores them with the customer and the channel (known customer → their channel; otherwise ElevenLabs' start source: `twilio` phone, `react_sdk` website, `custom_channel` → the trigger id in `async_metadata.external_id` tells email / Instagram / Messenger / Alexa apart). The lowest message is kept as "where it turned" |
+| **Staff alerts** | Upset (frustration ≥ 0.6, sentiment ≤ −0.5, or one message ≥ 0.7) **or** Ellie's analysis item **`needs_follow_up`** is true → one email to **`STAFF_ALERT_EMAIL`** (comma-separated; never the CDA mailbox) from the demo mailbox, with a link to `/admin`. Only conversations under 2 hours old; claimed with `alerted_at` so a repeated webhook emails once. Without `STAFF_ALERT_EMAIL` nothing is emailed and the conversation waits on the Mood tab |
+| **Live mood in Aida rooms** | The host's browser sends each customer line to `/api/aida/mood` (employee ticket); Claude Haiku rates it (~1 s, 6 s limit), it is stored in `aida_moods` and shared with other staff over LiveKit (`mood` message). Staff see a dot per line and a mood meter; a frustrated customer → Aida gets a `[Customer mood]` contextual update **before** the line, so her draft opens with an apology and offers escalation. Customers never receive moods |
+| **Upset emails** | Claude rates each incoming email before Ellie gets it (`email_messages.mood_label / mood_frustration / mood_reason`). Frustration ≥ 0.6 → her answer is always a **draft**, even in auto mode, labelled **Ellie/Upset customer** as well, and staff are alerted. The Email tab shows 😠 Upset |
+| **Ellie reacts** | Prompt section *When the customer is upset*: apologise once, name the problem, slow down, one next step, offer a person; she promises a follow-up only when the customer wants it. Analysis item `needs_follow_up` (boolean) records that promise |
+
+The tab: share of positive / neutral / negative and average frustration (7 or 30 days), mood by channel,
+conversations per day, emails checked / held, Aida lines rated / frustrated, and the **unhappy
+conversations** (upset or follow-up promised) with the customer, channel, where it turned, a mood curve,
+the summary and **Mark followed up** (`handled_at`, `handled_by`). **⟳ Import past conversations** reads the
+last 30 days from ElevenLabs (free reads, never alerts); the daily cron does the last 2 days.
+On a customer's page every scored conversation is a dot in **Measured mood**, and ✨ Ask Claude bases
+its mood on those scores. Colours: blue positive, grey neutral, red negative (validated for colour blindness).
+
 ### Call list (Ellie phones customers)
 
 Staff enter phone numbers (`+44…`, or `07…` for the UK), an optional name and **instructions for
@@ -653,14 +678,15 @@ How it works (`src/lib/outboundCalls.ts`, tables `call_lists` and `call_list_ite
 | `/api/agent/post-call` | ElevenLabs post-call webhook | HMAC signature (`ELEVENLABS_WEBHOOK_SECRET`) |
 | `/api/email/gmail-push` | Google Pub/Sub | `?token=` `GMAIL_PUSH_SECRET` |
 | `/api/email/ellie-reply` | ElevenLabs (email replies) | HMAC signature (`EMAIL_CHANNEL_SIGNING_SECRET`) |
-| `/api/cron/daily` | Vercel Cron, 06:00 UTC: renews the Gmail watch, refreshes the Instagram token | `Bearer CRON_SECRET` |
+| `/api/cron/daily` | Vercel Cron, 06:00 UTC: renews the Gmail watch, refreshes the Instagram token, compares sent email drafts, imports the last 2 days of moods | `Bearer CRON_SECRET` |
 | `/api/email/gmail-watch` | By hand, to restart the Gmail watch | `Bearer CRON_SECRET` or the push secret |
 | `/api/instagram/webhook`, `/api/messenger/webhook` | Meta | `?token=` `INSTAGRAM_WEBHOOK_SECRET` / `MESSENGER_WEBHOOK_SECRET` (+ Meta signature if `META_APP_SECRET` is set) |
 | `/api/instagram/reply`, `/api/messenger/reply` | ElevenLabs (replies) | HMAC signature (`INSTAGRAM_CHANNEL_SIGNING_SECRET` / `MESSENGER_CHANNEL_SIGNING_SECRET`) |
 | `/api/alexa` | Amazon (Alexa skill) | Amazon's request signature + our skill ID |
 | `/api/alexa/reply` | ElevenLabs (Alexa answers) | HMAC signature (`ALEXA_CHANNEL_SIGNING_SECRET`) |
 | `/api/email/mode`, `/api/admin/*` | `/admin` | Aida staff token |
-| `/api/aida/*` | Aida rooms | Staff token, room ticket, or nothing for customers (each route checks) |
+| `/api/aida/*` | Aida rooms (`/api/aida/mood`: employee ticket only) | Staff token, room ticket, or nothing for customers (each route checks) |
+| `/docs` | Anyone | Nothing: public page, no secrets |
 | `/api/elevenlabs/*`, `/api/anam/session`, `/api/account`, `/api/transcript/email` | Customer site | Site password |
 
 **Main files**: `src/components/AssistantApp.tsx` (tabs) · `src/lib/customers.ts` (memory) ·
@@ -693,7 +719,8 @@ How it works (`src/lib/outboundCalls.ts`, tables `call_lists` and `call_list_ite
 | `ALEXA_SKILL_ID` | The Alexa skill's ID (requests for any other skill are refused) |
 | `ALEXA_CHANNEL_INBOUND_URL`, `ALEXA_CHANNEL_INBOUND_SECRET`, `ALEXA_CHANNEL_SIGNING_SECRET` | "CDA Alexa" Custom Channel |
 | `META_APP_SECRET` (optional) | Also check Meta's signature on Instagram and Messenger webhooks |
-| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Insights on `/admin` |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Insights on `/admin`, email and Aida moods |
+| `STAFF_ALERT_EMAIL` | Who gets the "upset customer" emails (one address or several, comma-separated). Optional |
 | `FRESHDESK_API_KEY`, `FRESHDESK_SUBDOMAIN` | Only to recognise old Freshdesk conversations; can go once Freshdesk is closed |
 
 ---

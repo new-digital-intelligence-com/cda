@@ -4,13 +4,18 @@ export type RoomTicket = { url: string; token: string; identity: string; name: s
 
 export type JoinedRoom = { room: { code: string; title: string | null }; ticket: RoomTicket };
 
+/** How one customer line sounded, rated by Claude: staff only, never sent to a customer. */
+export type LineMood = { label: "positive" | "neutral" | "negative"; score: number; frustration: number };
+
 /** Messages sent between browsers in a room, over LiveKit's data channel. */
 export type WireMessage =
   | { type: "speech"; id: string; text: string }
   | { type: "chat"; id: string; text: string }
   | { type: "suggestion"; id: string; text: string; replyTo: string }
   | { type: "approved"; suggestionId: string; text: string }
-  | { type: "declined"; suggestionId: string };
+  | { type: "declined"; suggestionId: string }
+  /** The host shares each customer line's mood with the other employees. */
+  | { type: "mood"; lineId: string; mood: LineMood };
 
 export type TimelineLine = {
   id: string;

@@ -12,6 +12,8 @@ type RecentEmail = {
   status: "new" | "waiting" | "replying" | "sent" | "draft" | "skipped" | "failed";
   reason: string | null;
   at: string;
+  /** Claude rated the email upset: Ellie's answer was left as a draft for staff. */
+  upset?: boolean;
 };
 
 type EmailState = { configured: boolean; mode?: EmailMode; mailbox?: string | null; recent?: RecentEmail[] };
@@ -138,8 +140,13 @@ export function EmailModeCard({ staffToken }: { staffToken: string }) {
               <li key={email.id} className="rounded-lg bg-cda-grey-light px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="min-w-0 truncate text-sm font-semibold text-cda-dark">{email.from ?? "Unknown sender"}</span>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS[email.status].className}`}>
-                    {STATUS[email.status].label}
+                  <span className="flex shrink-0 gap-1">
+                    {email.upset && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-cda-red-dark">😠 Upset</span>
+                    )}
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS[email.status].className}`}>
+                      {STATUS[email.status].label}
+                    </span>
                   </span>
                 </div>
                 <p className="truncate text-xs text-cda-text">{email.subject || "(no subject)"}</p>

@@ -158,6 +158,10 @@ const LABELS: Record<Outcome, { name: string; color: { backgroundColor: string; 
   failed: { name: "Ellie/Failed", color: { backgroundColor: "#fb4c2f", textColor: "#ffffff" } },
 };
 
+/** Put next to the outcome on an email whose writer was upset (😊 Mood); labelOutcome never removes it. */
+const UPSET_LABEL = { name: "Ellie/Upset customer", color: { backgroundColor: "#cc3a21", textColor: "#ffffff" } };
+const ALL_LABELS = [...Object.values(LABELS), UPSET_LABEL];
+
 let labelIds: Map<string, string> | null = null;
 
 async function createLabel(name: string, color?: { backgroundColor: string; textColor: string }) {
@@ -173,7 +177,7 @@ async function createLabel(name: string, color?: { backgroundColor: string; text
 }
 
 async function ellieLabelIds(): Promise<Map<string, string>> {
-  const wanted = ["Ellie", ...Object.values(LABELS).map((label) => label.name)];
+  const wanted = ["Ellie", ...ALL_LABELS.map((label) => label.name)];
   if (labelIds && wanted.every((name) => labelIds?.has(name))) return labelIds;
 
   const load = async () => {
@@ -185,7 +189,7 @@ async function ellieLabelIds(): Promise<Map<string, string>> {
   if (missing.length) {
     // The parent first, so Gmail nests the others under it.
     for (const name of missing) {
-      await createLabel(name, Object.values(LABELS).find((label) => label.name === name)?.color);
+      await createLabel(name, ALL_LABELS.find((label) => label.name === name)?.color);
     }
     found = await load();
   }
@@ -209,5 +213,15 @@ export async function labelOutcome(gmailId: string, outcome: Outcome) {
   await gmail(`messages/${encodeURIComponent(gmailId)}/modify`, {
     method: "POST",
     body: JSON.stringify({ addLabelIds: add, removeLabelIds: remove }),
+  });
+}
+
+/** Marks the email "Ellie/Upset customer", on top of its outcome label. */
+export async function labelUpset(gmailId: string) {
+  const id = (await ellieLabelIds()).get(UPSET_LABEL.name);
+  if (!id) return;
+  await gmail(`messages/${encodeURIComponent(gmailId)}/modify`, {
+    method: "POST",
+    body: JSON.stringify({ addLabelIds: [id], removeLabelIds: [] }),
   });
 }

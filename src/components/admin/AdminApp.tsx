@@ -7,12 +7,14 @@ import { rememberStaffToken, savedStaffToken } from "../aida/types";
 import { CallListPanel } from "./CallListPanel";
 import { CustomersPanel } from "./CustomersPanel";
 import { KnowledgePanel } from "./KnowledgePanel";
+import { MoodPanel } from "./MoodPanel";
 
-type AdminTab = "rooms" | "customers" | "calls" | "knowledge" | "email";
+type AdminTab = "rooms" | "customers" | "mood" | "calls" | "knowledge" | "email";
 
 const TABS: { id: AdminTab; label: string }[] = [
   { id: "rooms", label: "📞 Aida rooms" },
   { id: "customers", label: "👥 Customers" },
+  { id: "mood", label: "😊 Mood" },
   { id: "calls", label: "📲 Call list" },
   { id: "knowledge", label: "📚 Knowledge" },
   { id: "email", label: "✉️ Email" },
@@ -21,7 +23,7 @@ const TABS: { id: AdminTab; label: string }[] = [
 /**
  * The staff side of the demo (/admin), behind the Aida staff password rather than the site
  * password: Aida rooms, who the customers are, call lists Ellie phones, what Ellie could not answer
- * (and the answers staff approve for her), and the email reply switch. The sign-in is kept per
+ * (and the answers staff approve for her), how customers felt (😊 Mood), and the email reply switch. The sign-in is kept per
  * browser tab, so an invite link opened in another tab joins as a customer.
  *
  * Tabs stay mounted once opened, so moving to Customers does not drop a staff member out of a call.
@@ -92,6 +94,11 @@ export function AdminApp() {
       {opened.has("customers") && (
         <div className={tab === "customers" ? "" : "hidden"}>
           <CustomersPanel staffToken={staffToken} onSignOut={signOut} />
+        </div>
+      )}
+      {opened.has("mood") && (
+        <div className={tab === "mood" ? "" : "hidden"}>
+          <MoodPanel staffToken={staffToken} onSignOut={signOut} />
         </div>
       )}
       {opened.has("calls") && (

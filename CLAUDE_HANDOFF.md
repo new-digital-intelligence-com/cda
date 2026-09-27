@@ -1,6 +1,7 @@
 # Claude handoff – CDA multi-channel assistant demo
 
-Read this first when continuing the project on another device. Last updated: **21 September 2026**.
+Read this first when continuing the project on another device. Last updated: **27 September 2026**.
+Public plain-words documentation of every feature: **https://cda-demo.vercel.app/docs** (`src/app/docs/page.tsx`; keep it up to date when a feature changes).
 Full channel-by-channel setup (IDs, steps, costs, troubleshooting): [CHANNEL_SETUP.md](CHANNEL_SETUP.md).
 
 > **This repository is public.** Never write API keys, tokens, passwords or secrets into any committed file.
@@ -25,7 +26,9 @@ for staff, and Aida rooms draft answers for staff on live calls.
 | Alexa skill "CDA Assistant" (Echo / Alexa app) | ✅ Built 22 Sep (development mode) | Amazon → web app (`src/lib/alexa.ts`, request signature checked) → Ellie's "CDA Alexa" Custom Channel; answers wait in Supabase `alexa_replies` until read out. CHANNEL_SETUP.md §6 |
 | Hosted web page / QR code | ✅ Live | ElevenLabs talk-to link (not password protected) |
 | **This web app** (chat, file upload, voice, video avatar, Aida calls, channel links) | ✅ Live | Next.js on Vercel: https://cda-demo.vercel.app (site password) — customers only |
-| **Admin page** `/admin` (Aida rooms, email switch, customers + Claude insights) | ✅ Live (21 Sep) | Same app, behind the Aida staff password — staff only |
+| **Admin page** `/admin` (Aida rooms, customers + Claude insights, 😊 Mood, call list, knowledge, email switch) | ✅ Live | Same app, behind the Aida staff password — staff only |
+| **Customer mood** (sentiment on every channel, staff alerts, live mood in Aida rooms, upset emails held as drafts) | ✅ Built 27 Sep | `src/lib/mood.ts`, CHANNEL_SETUP.md §10 “Customer mood”. Needs `supabase/schema.sql` run again + `STAFF_ALERT_EMAIL` on Vercel |
+| **Docs page** `/docs` | ✅ 27 Sep | Public, no password, no secrets |
 | Video avatar (Avatar tab) | ✅ Live | **Anam** avatar "Sofia" (the user's own Ellie picture) joined to the ElevenLabs agent |
 | Slack (bot "CDA_Support") | ⏳ In progress | Native ElevenLabs Slack integration, own Slack app (CHANNEL_SETUP.md §14) |
 | WhatsApp, phone number | ⏸ Parked | See CHANNEL_SETUP.md §14 |
@@ -74,7 +77,8 @@ Create `.env.local` (git-ignored). Copy the values from **Vercel → project `cd
 | `INSTAGRAM_ACCESS_TOKEN` / `INSTAGRAM_USER_ID` / `INSTAGRAM_WEBHOOK_SECRET` / `INSTAGRAM_CHANNEL_*` (3) | Instagram in the web app (starting token; refreshed copy lives in Supabase `channel_tokens`) |
 | `MESSENGER_PAGE_TOKEN` / `MESSENGER_PAGE_ID` / `MESSENGER_WEBHOOK_SECRET` / `MESSENGER_CHANNEL_*` (3) | Messenger Page token (never expires), Page ID, Meta Callback URL secret, "CDA Messenger" Custom Channel |
 | `ALEXA_SKILL_ID` / `ALEXA_CHANNEL_*` (3) | Alexa skill ID and the "CDA Alexa" Custom Channel |
-| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude Haiku (`claude-haiku-4-5`) for the customer insights on `/admin` |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Claude Haiku (`claude-haiku-4-5`) for the insights on `/admin` and the email / Aida moods |
+| `STAFF_ALERT_EMAIL` | Optional: who gets the “upset customer” emails (comma-separated). Never the CDA mailbox |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit Cloud project for Aida rooms (server only) |
 | `AIDA_AGENT_ID` | The Aida copilot agent, `agent_2601m31rbrn8emrbfe8vgxgxdta9` |
 | `AIDA_STAFF_PASSWORD` | Aida's own staff password; the site password does **not** make anyone staff |
@@ -149,6 +153,13 @@ scenarios "IG – Instagram in" (7456234) and "IG – Ellie reply out" (7456248)
 ---
 
 ## 5. Open tasks (in order)
+
+00. **Customer mood** (27 Sep 2026) – built and pushed. The user still has to: run `supabase/schema.sql` again
+   (tables `conversation_moods`, `aida_moods`, columns `email_messages.mood_*`), add `STAFF_ALERT_EMAIL` on Vercel
+   and redeploy, then `/admin` → 😊 Mood → **Import past conversations**. Ellie got the prompt section *When the
+   customer is upset* and the analysis item `needs_follow_up` (backup of her agent before the change in the
+   session scratchpad). Test without spending credits: an angry email (draft + label + alert), an Aida room
+   (mood dots, meter, Aida's apology draft).
 
 0. **Cross-channel customer memory** - **live** on Telegram, email and the website (chat, voice,
    avatar). Details: CHANNEL_SETUP.md §8. Customers create an account on the site and link each

@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, isValidSession, sitePasswordConfigured } from "@/lib/auth";
 
 // The icon is linked from the login page itself, so it has to be readable before signing in.
-const PUBLIC_PATHS = new Set(["/login", "/api/login", "/icon.svg"]);
+// /docs explains the demo to anyone (no secrets on it), so it needs no password either.
+const PUBLIC_PATHS = new Set(["/login", "/api/login", "/icon.svg", "/docs"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

@@ -361,3 +361,59 @@ create table if not exists customer_appliances (
 create unique index if not exists customer_appliances_once_idx on customer_appliances (customer_id, model);
 
 alter table customer_appliances enable row level security;
+
+-- ---------------------------------------------------------------------------------------------
+-- Customer mood (sentiment). ElevenLabs scores every conversation after it ends: a label, a
+-- sentiment score from -1 (very negative) to +1, and a frustration score from 0 to 1, overall and
+-- for each customer message. The post-call webhook keeps them here for /admin → 😊 Mood; the
+-- "Import" button and the daily cron fill in any the webhook missed. `turns` holds the scores of
+-- the customer's messages in order (with a short excerpt), so the page can show where the mood
+-- dropped. Staff see it on /admin only.
+create table if not exists conversation_moods (
+  conversation_id   text primary key,
+  customer_id       uuid references customers (id) on delete set null,
+  channel           text,                       -- telegram | email | phone | website | …, null if unknown
+  label             text not null,              -- positive | neutral | negative
+  score             real not null,              -- overall sentiment, -1 … +1
+  frustration       real not null,              -- overall frustration, 0 … 1
+  min_score         real,                       -- lowest customer message
+  max_frustration   real,                       -- most frustrated customer message
+  turns             jsonb not null default '[]',-- [{ at, excerpt, score, frustration }] customer messages
+  low_point         text,                       -- excerpt of the message where the mood was lowest
+  title             text,                       -- ElevenLabs' short title for the conversation
+  summary           text,
+  follow_up         boolean not null default false, -- Ellie promised a CDA follow-up or the customer asked for a person
+  started_at        timestamptz not null,
+  alerted_at        timestamptz,                -- when staff were emailed about it
+  handled_at        timestamptz,                -- when staff marked it followed up
+  handled_by        text,
+  created_at        timestamptz not null default now()
+);
+
+create index if not exists conversation_moods_recent_idx on conversation_moods (started_at desc);
+create index if not exists conversation_moods_customer_idx on conversation_moods (customer_id, started_at desc);
+
+alter table conversation_moods enable row level security;
+
+-- Email: the mood of the incoming email, checked by Claude before Ellie sees it. An upset email is
+-- never answered automatically: it becomes a Gmail draft for staff, labelled "Ellie/Upset customer".
+alter table email_messages add column if not exists mood_label       text;  -- positive | neutral | negative
+alter table email_messages add column if not exists mood_frustration real;
+alter table email_messages add column if not exists mood_reason      text;
+
+-- Aida rooms: the mood of each customer line, checked live by Claude for the staff member hosting
+-- Aida. Staff only, never shown to the customer.
+create table if not exists aida_moods (
+  id          bigint generated always as identity primary key,
+  room_id     uuid not null references aida_rooms (id) on delete cascade,
+  line_id     text not null,
+  excerpt     text,
+  label       text not null,
+  score       real not null,
+  frustration real not null,
+  created_at  timestamptz not null default now()
+);
+
+create unique index if not exists aida_moods_line_idx on aida_moods (room_id, line_id);
+
+alter table aida_moods enable row level security;

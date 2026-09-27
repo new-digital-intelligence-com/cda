@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { safeNextPath, sitePasswordConfigured } from "@/lib/auth";
 import LoginForm from "./LoginForm";
 
@@ -18,7 +19,12 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           <span className="rounded-md bg-cda-red px-2.5 py-1 text-xl font-extrabold tracking-wider text-white">CDA</span>
           <span className="text-lg font-semibold text-cda-dark">Customer Assistant</span>
         </div>
-        <p className="mt-2 text-xs text-cda-text">NDI demo · not an official CDA website</p>
+        <p className="mt-2 text-xs text-cda-text">
+          NDI demo · not an official CDA website ·{" "}
+          <Link href="/docs" className="underline">
+            How this demo works
+          </Link>
+        </p>
         {sitePasswordConfigured() ? (
           <LoginForm nextPath={nextPath} />
         ) : (

@@ -2,6 +2,7 @@ import { hasValidWebhookSignature } from "@/lib/agentAuth";
 import { addAppliances, addNote } from "@/lib/customers";
 import { recordSaidFeedback } from "@/lib/feedback";
 import { recordGaps } from "@/lib/knowledge";
+import { recordConversationMood, type ConversationForMood } from "@/lib/mood";
 import { callEnded } from "@/lib/outboundCalls";
 
 /** Notes are a reminder, not a transcript: a few lines are enough for the next conversation. */
@@ -74,6 +75,14 @@ export async function POST(request: Request) {
   if (event.data?.conversation_id) {
     await recordSaidFeedback(event.data.conversation_id, results, isPhoneCall).catch((error) =>
       console.error("feedback could not be stored", error),
+    );
+  }
+
+  // The customer's mood (ElevenLabs' sentiment scores) for /admin → 😊 Mood; staff are emailed when
+  // the customer was upset or Ellie promised a follow-up. Never fatal: the note below still matters.
+  if (event.data?.conversation_id) {
+    await recordConversationMood(event.data as ConversationForMood, { alert: true }).catch((error) =>
+      console.error("mood could not be stored", error),
     );
   }
 

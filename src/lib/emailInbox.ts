@@ -6,6 +6,8 @@
 //   Ellie's answer -> /api/email/ellie-reply -> email_mode on Aida
 //        -> "auto": sent in the customer's thread    -> label Ellie/Replied
 //        -> "draft": a Gmail draft in that thread    -> label Ellie/Draft ready
+//   An upset customer (Claude rates each email's mood first) is never answered automatically: the
+//   answer becomes a draft, labelled Ellie/Upset customer as well, and staff are emailed.
 //
 // Supabase keeps one row per email (email_messages), which is also what stops Gmail's or
 // ElevenLabs' repeated deliveries from producing a second reply. It keeps who wrote and the
@@ -13,6 +15,9 @@
 
 import { customerForChannel, forgetRobotSender, rememberConversation } from "./customers";
 import { getEmailMode } from "./emailMode";
+import { withoutQuotedHistory } from "./feedback";
+import { isUpsetEmail, rateMessage } from "./mood";
+import { sendMoodAlert } from "./moodAlert";
 import { automatedReason, buildReply, isSkip, parseGmailMessage, plainReply, replySubject, textForEllie, type IncomingEmail } from "./emailParse";
 import {
   createDraft,
@@ -21,6 +26,7 @@ import {
   gmailConfigured,
   inboxArrivalsSince,
   labelOutcome,
+  labelUpset,
   mailboxAddress,
   sendRaw,
   watchInbox,
@@ -47,6 +53,11 @@ export type EmailRow = {
   /** Draft mode: the Gmail draft and Ellie's text, to compare with what staff finally send. */
   draft_id?: string | null;
   ellie_reply?: string | null;
+  /** The email's mood, rated by Claude before Ellie saw it (null before schema.sql is re-run). */
+  mood_label?: string | null;
+  mood_frustration?: number | null;
+  mood_reason?: string | null;
+  received_at?: string | null;
 };
 
 /** Mail older than this is never answered, e.g. an old email moved back into the inbox. */
@@ -215,6 +226,21 @@ async function sendToEllie(email: IncomingEmail): Promise<string> {
   return body.conversation_id;
 }
 
+/** Claude's rating of the email, kept on its row. A missing rating simply means "not upset". */
+async function rateEmail(email: IncomingEmail) {
+  const mood = await rateMessage(`Subject: ${email.subject || "(no subject)"}
+
+${withoutQuotedHistory(email.text)}`, {
+    timeoutMs: 12_000,
+  });
+  if (!mood) return;
+  await rest(`email_messages?gmail_id=eq.${q(email.gmailId)}`, {
+    method: "PATCH",
+    prefer: "return=minimal",
+    body: JSON.stringify({ mood_label: mood.label, mood_frustration: mood.frustration, mood_reason: mood.reason || null }),
+  }).catch((error) => console.error("email mood not stored (has supabase/schema.sql been run?)", error));
+}
+
 async function handleIncoming(gmailId: string) {
   const message = await getMessage(gmailId);
   if (!message) return;
@@ -235,6 +261,9 @@ async function handleIncoming(gmailId: string) {
     await label(gmailId, "skipped");
     return;
   }
+
+  // Its mood, before Ellie sees it: an upset customer is never answered automatically (😊 Mood).
+  await rateEmail(email);
 
   // The sender's customer record comes first, so the conversation can be tied to it the moment
   // ElevenLabs names it: Ellie's customer_lookup runs a second or so later and finds it. Receiving
@@ -344,7 +373,9 @@ export async function handleEllieReply(payload: ReplyWebhook): Promise<{ outcome
     return { outcome: "already handled" };
   }
 
-  const mode = await getEmailMode();
+  // An upset customer always gets a person: Ellie's answer waits as a draft, whatever the switch says.
+  const upset = isUpsetEmail(row.mood_frustration);
+  const mode = upset ? "draft" : await getEmailMode();
   const to = row.reply_to ?? row.from_email;
   try {
     if (!to) throw new Error("The email has no address to reply to");
@@ -363,13 +394,15 @@ export async function handleEllieReply(payload: ReplyWebhook): Promise<{ outcome
       await label(row.gmail_id, "replied");
     } else {
       const draftId = await createDraft(raw, row.thread_id);
-      await move(row.gmail_id, ["replying"], { status: "draft", mode, draft_id: draftId, ellie_reply: text }).catch((error) => {
+      const reason = upset ? `upset customer${row.mood_reason ? `: ${row.mood_reason}` : ""}`.slice(0, 300) : null;
+      await move(row.gmail_id, ["replying"], { status: "draft", mode, reason, draft_id: draftId, ellie_reply: text }).catch((error) => {
         // Before supabase/schema.sql is re-run the comparison columns are missing: the draft itself
         // is still there, so record it without them rather than calling it a failure.
         console.error("could not keep Ellie's draft for comparison", error);
-        return move(row.gmail_id, ["replying"], { status: "draft", mode });
+        return move(row.gmail_id, ["replying"], { status: "draft", mode, reason });
       });
       await label(row.gmail_id, "draft");
+      if (upset) await flagUpset(row);
     }
     return { outcome: mode === "auto" ? "sent" : "draft" };
   } catch (error) {
@@ -379,10 +412,29 @@ export async function handleEllieReply(payload: ReplyWebhook): Promise<{ outcome
   }
 }
 
+/** An upset customer's email: labelled for staff in Gmail, and staff are emailed. Never fatal. */
+async function flagUpset(row: EmailRow) {
+  await labelUpset(row.gmail_id).catch((error) => console.error("upset label not added", error));
+  await sendMoodAlert({
+    kind: "email",
+    fromName: row.from_name,
+    fromEmail: row.from_email,
+    subject: row.subject,
+    when: new Date(row.received_at ?? row.created_at),
+    frustration: row.mood_frustration ?? 0,
+    reason: row.mood_reason ?? "",
+  }).catch((error) => console.error("upset email alert not sent", error));
+}
+
 // --- for the staff page ------------------------------------------------------------------------
 
 export async function recentEmails(limit = 8): Promise<EmailRow[]> {
   return rest<EmailRow[]>(
-    `email_messages?select=gmail_id,thread_id,from_email,from_name,subject,status,reason,mode,created_at&order=created_at.desc&limit=${limit}`,
+    `email_messages?select=gmail_id,thread_id,from_email,from_name,subject,status,reason,mode,created_at,mood_label,mood_frustration&order=created_at.desc&limit=${limit}`,
+  ).catch(() =>
+    // Before supabase/schema.sql is re-run there are no mood columns: list the emails without them.
+    rest<EmailRow[]>(
+      `email_messages?select=gmail_id,thread_id,from_email,from_name,subject,status,reason,mode,created_at&order=created_at.desc&limit=${limit}`,
+    ),
   );
 }

@@ -3,7 +3,8 @@
 import { CommitStrategy, ConversationProvider, useConversation, useScribe } from "@elevenlabs/react";
 import { DisconnectReason, Room, RoomEvent, Track, type Participant } from "livekit-client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AidaRole, JoinedRoom, Person, Suggestion, TimelineLine, WireMessage } from "./types";
+import { MoodMeter, moodColor, moodWord, upsetMood } from "./MoodMeter";
+import type { AidaRole, JoinedRoom, LineMood, Person, Suggestion, TimelineLine, WireMessage } from "./types";
 
 // One live Aida room. Voice and messages travel over LiveKit; each browser transcribes only its
 // own microphone, so every line is known to come from the person who said it.
@@ -11,6 +12,9 @@ import type { AidaRole, JoinedRoom, Person, Suggestion, TimelineLine, WireMessag
 // Aida, the copilot, runs in exactly one browser: the employee who joined first (the "host"). She
 // receives what customers say as questions and what employees say as background, and her drafts
 // are sent to employees only, so a customer's browser never even receives them.
+//
+// The host also rates the mood of each customer line (😊 Mood): staff see a coloured dot on the line
+// and a mood meter, and when the customer is frustrated Aida is told so before she drafts her answer.
 
 const TOPIC = "aida";
 const encoder = new TextEncoder();
@@ -67,6 +71,8 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   /** Set when the customer is signed in to their CDA account and Aida has been given their history. */
   const [knownCustomer, setKnownCustomer] = useState<string | null>(null);
+  /** Staff only: the mood of each customer line, by line id. */
+  const [moods, setMoods] = useState<Record<string, LineMood>>({});
 
   const roomRef = useRef<Room | null>(null);
   const audioBoxRef = useRef<HTMLDivElement>(null);
@@ -81,6 +87,8 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
   const lastCustomerRef = useRef("the customer");
   /** The customer background last handed to Aida, so it is sent once per Aida session. */
   const contextSentRef = useRef("");
+  /** Aida has been told the customer is frustrated (and not yet that they calmed down). */
+  const frustratedRef = useRef(false);
 
   // --- talking to our server and to the room ----------------------------------------------------
 
@@ -177,6 +185,45 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
     if (isHostRef.current && copilotReadyRef.current) copilotRef.current.sendContextualUpdate(text);
   };
 
+  /** Claude's rating of one customer line, or null if it does not come back quickly. */
+  const rateLine = async (lineId: string, text: string): Promise<LineMood | null> => {
+    try {
+      const response = await api("/api/aida/mood", {
+        method: "POST",
+        body: JSON.stringify({ lineId, text }),
+        signal: AbortSignal.timeout(7000),
+      });
+      return response.ok ? ((await response.json()) as LineMood) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * A customer line reaching the host: its mood is rated first (about a second), shown to staff and
+   * shared with the other employees; Aida hears about a frustrated customer before the line itself,
+   * so her draft for it already opens with an apology. A line is never lost if the rating fails.
+   */
+  const rateThenFeed = async (lineId: string, name: string, text: string) => {
+    const mood = await rateLine(lineId, text);
+    if (mood) {
+      setMoods((current) => ({ ...current, [lineId]: mood }));
+      send({ type: "mood", lineId, mood }, otherEmployees());
+      if (upsetMood(mood)) {
+        frustratedRef.current = true;
+        tellCopilot(
+          `[Customer mood] ${name} sounds ${moodWord(mood).toLowerCase()} (frustration ${Math.round(mood.frustration * 100)}%). ` +
+            "In your next draft: start with a short, sincere apology, acknowledge the problem in their own words, stay calm " +
+            "and brief, give one clear next step, and offer to escalate to a manager or arrange a call back if they want.",
+        );
+      } else if (frustratedRef.current && mood.score >= 0) {
+        frustratedRef.current = false;
+        tellCopilot(`[Customer mood] ${name} sounds calmer now. Go back to your normal friendly tone.`);
+      }
+    }
+    feedCopilot(name, "customer", text);
+  };
+
   /** Something I said or typed: show it, send it to the room, record it, and let Aida hear it. */
   const sayLine = (kind: "speech" | "chat", text: string) => {
     const id = crypto.randomUUID();
@@ -240,7 +287,14 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
           case "speech":
           case "chat":
             addLine({ id: message.id, kind: message.type, name, role, text: message.text });
-            feedCopilot(name, role, message.text);
+            // Only the host rates customer lines (once for the whole room) and feeds Aida.
+            if (role === "customer" && isEmployee && isHostRef.current) void rateThenFeed(message.id, name, message.text);
+            else feedCopilot(name, role, message.text);
+            return;
+          case "mood":
+            // Moods come from the host employee, and only employees are shown them.
+            if (!isEmployee || role !== "employee" || typeof message.mood?.frustration !== "number") return;
+            setMoods((current) => ({ ...current, [message.lineId]: message.mood }));
             return;
           case "suggestion":
             // Drafts only ever come from an employee, and only employees look at them.
@@ -335,6 +389,13 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
             }
           })
           .catch(() => {});
+        // Staff joining late also get the moods rated so far.
+        if (isEmployee) {
+          void api("/api/aida/mood")
+            .then((response) => (response.ok ? response.json() : { moods: {} }))
+            .then(({ moods: saved }: { moods: Record<string, LineMood> }) => setMoods((current) => ({ ...saved, ...current })))
+            .catch(() => {});
+        }
       },
     };
   });
@@ -634,7 +695,7 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
               <p className="text-center text-sm text-cda-text">Say hello, or type a message below.</p>
             )}
             {lines.map((line) => (
-              <LineView key={line.id} line={line} viewerRole={ticket.role} />
+              <LineView key={line.id} line={line} viewerRole={ticket.role} mood={isEmployee ? moods[line.id] : undefined} />
             ))}
             {scribe.partialTranscript && (
               <p className="text-right text-sm italic text-cda-text">{scribe.partialTranscript}…</p>
@@ -679,6 +740,12 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
             <p className="text-xs text-cda-text">
               Only CDA staff see this. Approve a draft to send it to the customer in the chat.
             </p>
+            <MoodMeter
+              lines={lines
+                .filter((line) => line.role === "customer" && moods[line.id])
+                .map((line) => ({ id: line.id, text: line.text, mood: moods[line.id] }))}
+              aidaAdapts={isHost && copilot.status === "connected"}
+            />
             {knownCustomer && (
               <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800">
                 <strong>{knownCustomer}</strong> is signed in to their CDA account. Aida has their earlier
@@ -771,7 +838,7 @@ function RoomView({ joined, onLeave, onViewHistory }: Props) {
   );
 }
 
-export function LineView({ line, viewerRole }: { line: TimelineLine; viewerRole: AidaRole }) {
+export function LineView({ line, viewerRole, mood }: { line: TimelineLine; viewerRole: AidaRole; mood?: LineMood }) {
   if (line.kind === "system") {
     return <p className="text-center text-xs text-cda-text">{line.text}</p>;
   }
@@ -793,6 +860,16 @@ export function LineView({ line, viewerRole }: { line: TimelineLine; viewerRole:
         {/* Spoken or typed makes no difference to the reader: a message is a message. */}
         <p className={`text-xs font-semibold ${mySide ? "text-white/70" : "text-cda-text"}`}>
           {who} · {line.role === "employee" ? "CDA" : "customer"}
+          {/* Staff only: how the customer sounded. The dot carries the colour, the word says it. */}
+          {mood && line.role === "customer" && (
+            <span
+              className="ms-2 inline-flex items-center gap-1"
+              title={`Sentiment ${mood.score.toFixed(1)} · frustration ${Math.round(mood.frustration * 100)}%`}
+            >
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: moodColor(mood) }} aria-hidden="true" />
+              {moodWord(mood)}
+            </span>
+          )}
         </p>
         <p className="mt-0.5 whitespace-pre-wrap text-sm">{line.text}</p>
       </div>

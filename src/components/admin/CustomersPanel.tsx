@@ -29,7 +29,13 @@ type Overview = {
 type CustomerDetail = {
   customer: CustomerSummary;
   notes: { summary: string; channel: string | null; createdAt: string }[];
-  conversations: { id: string; channel: string | null; createdAt: string }[];
+  conversations: {
+    id: string;
+    channel: string | null;
+    createdAt: string;
+    /** ElevenLabs' measured mood of the conversation (😊 Mood); null when it was not scored. */
+    mood?: { label: "positive" | "neutral" | "negative"; score: number; frustration: number; upset: boolean } | null;
+  }[];
   rooms: { code: string; title: string | null; createdAt: string; closedAt: string | null }[];
   emails: { subject: string | null; status: string; reason: string | null; createdAt: string }[];
 };
@@ -63,8 +69,9 @@ const CHANNEL_STYLE: Record<string, { icon: string; label: string; className: st
   phone: { icon: "☎", label: "Phone", className: "bg-emerald-50 text-emerald-800" },
   website: { icon: "🌐", label: "Website", className: "bg-cda-grey text-cda-dark" },
   slack: { icon: "#", label: "Slack", className: "bg-purple-50 text-purple-800" },
+  messaging: { icon: "💬", label: "Messaging app", className: "bg-cda-grey text-cda-dark" },
 };
-const channelStyle = (channel: string | null) =>
+export const channelStyle = (channel: string | null) =>
   CHANNEL_STYLE[channel ?? ""] ?? { icon: "•", label: channel ?? "unknown", className: "bg-cda-grey text-cda-dark" };
 
 const EMAIL_STATUS: Record<string, string> = {
@@ -478,6 +485,8 @@ function CustomerView({ id, staffToken }: { id: string; staffToken: string }) {
         </div>
       </div>
 
+      <MoodStrip conversations={detail.conversations} />
+
       <div className="rounded-xl border border-cda-grey p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="font-semibold text-cda-dark">AI insight</p>
@@ -552,5 +561,52 @@ function CustomerView({ id, staffToken }: { id: string; staffToken: string }) {
         )}
       </div>
     </section>
+  );
+}
+
+const MOOD_DOT: Record<"positive" | "neutral" | "negative", { color: string; word: string }> = {
+  positive: { color: "#2a78d6", word: "Positive" },
+  neutral: { color: "#b4b2ab", word: "Neutral" },
+  negative: { color: "#d03d3b", word: "Negative" },
+};
+
+/** One dot per conversation ElevenLabs scored, oldest to newest, with the counts beside them. */
+function MoodStrip({ conversations }: { conversations: CustomerDetail["conversations"] }) {
+  const scored = conversations.filter((conversation) => conversation.mood).reverse();
+  const count = (label: "positive" | "neutral" | "negative") => scored.filter((c) => c.mood?.label === label).length;
+  const upset = scored.filter((c) => c.mood?.upset).length;
+  return (
+    <div className="rounded-xl border border-cda-grey px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-cda-dark">Measured mood</p>
+        {scored.length > 0 && (
+          <p className="flex flex-wrap items-center gap-3 text-xs text-cda-text">
+            {(["positive", "neutral", "negative"] as const).map((label) => (
+              <span key={label} className="inline-flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: MOOD_DOT[label].color }} aria-hidden="true" />
+                {MOOD_DOT[label].word} {count(label)}
+              </span>
+            ))}
+            {upset > 0 && <span className="font-semibold text-cda-red-dark">Upset {upset}</span>}
+          </p>
+        )}
+      </div>
+      {scored.length === 0 ? (
+        <p className="mt-1 text-xs text-cda-text">No scored conversation yet. ElevenLabs scores each conversation when it ends.</p>
+      ) : (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-cda-text">Oldest</span>
+          {scored.map((conversation) => (
+            <span
+              key={conversation.id}
+              className={`inline-block h-3.5 w-3.5 rounded-full ring-2 ${conversation.mood?.upset ? "ring-cda-red/40" : "ring-white"}`}
+              style={{ backgroundColor: MOOD_DOT[conversation.mood!.label].color }}
+              title={`${when(conversation.createdAt)} · ${channelStyle(conversation.channel).label} · ${MOOD_DOT[conversation.mood!.label].word} · frustration ${Math.round(conversation.mood!.frustration * 100)}%`}
+            />
+          ))}
+          <span className="text-[11px] text-cda-text">newest</span>
+        </div>
+      )}
+    </div>
   );
 }

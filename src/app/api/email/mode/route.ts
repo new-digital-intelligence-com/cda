@@ -2,6 +2,7 @@ import { isStaffRequest } from "@/lib/aidaStaff";
 import { emailChannelConfigured, recentEmails } from "@/lib/emailInbox";
 import { getEmailMode, setEmailMode } from "@/lib/emailMode";
 import { mailboxAddress } from "@/lib/gmail";
+import { isUpsetEmail } from "@/lib/mood";
 
 // The staff switch between sending Ellie's email replies straight away and leaving them as Gmail
 // drafts, plus the last few emails and what happened to each. Aida staff only (x-aida-staff).
@@ -28,6 +29,8 @@ export async function GET(request: Request) {
       status: row.status,
       reason: row.reason,
       at: row.created_at,
+      // The writer's mood, rated before Ellie saw it; upset ones are always left as drafts.
+      upset: isUpsetEmail(row.mood_frustration),
     })),
   });
 }

@@ -5,6 +5,7 @@
 import { displayCode } from "./aida";
 import { askClaude, parseJsonObject } from "./anthropic";
 import { elevenLabsConversation } from "./elevenlabs";
+import { moodsFor, type ConversationMoodBadge } from "./mood";
 import { supabaseRest as rest } from "./supabase";
 
 const q = encodeURIComponent;
@@ -137,7 +138,8 @@ export async function customersOverview(): Promise<{ customers: CustomerSummary[
 export type CustomerDetail = {
   customer: CustomerSummary;
   notes: { summary: string; channel: string | null; createdAt: string }[];
-  conversations: { id: string; channel: string | null; createdAt: string }[];
+  /** mood: ElevenLabs' measured mood of that conversation (😊 Mood), null when it was not scored. */
+  conversations: { id: string; channel: string | null; createdAt: string; mood: ConversationMoodBadge | null }[];
   rooms: { code: string; title: string | null; createdAt: string; closedAt: string | null }[];
   emails: { subject: string | null; status: string; reason: string | null; createdAt: string }[];
 };
@@ -165,6 +167,7 @@ export async function customerDetail(id: string): Promise<CustomerDetail | null>
       ).catch(() => [])
     : [];
 
+  const moods = await moodsFor(conversations.map((conversation) => conversation.conversation_id));
   const last = [notes[0]?.created_at, conversations[0]?.created_at, row.created_at].filter(Boolean).sort().at(-1) as string;
   return {
     customer: {
@@ -179,7 +182,12 @@ export async function customerDetail(id: string): Promise<CustomerDetail | null>
       conversations: conversations.length,
     },
     notes: notes.map((note) => ({ summary: note.summary, channel: note.channel, createdAt: note.created_at })),
-    conversations: conversations.map((conversation) => ({ id: conversation.conversation_id, channel: conversation.channel, createdAt: conversation.created_at })),
+    conversations: conversations.map((conversation) => ({
+      id: conversation.conversation_id,
+      channel: conversation.channel,
+      createdAt: conversation.created_at,
+      mood: moods[conversation.conversation_id] ?? null,
+    })),
     rooms: rooms.map((room) => ({ code: displayCode(room.code), title: room.title, createdAt: room.created_at, closedAt: room.closed_at })),
     emails: emails.map((email) => ({ subject: email.subject, status: email.status, reason: email.reason, createdAt: email.created_at })),
   };
@@ -240,6 +248,9 @@ ${list(detail.notes.slice(0, 30).map((note) => `${day(note.createdAt)} ${note.ch
 Emails received:
 ${list(detail.emails.map((email) => `${day(email.createdAt)} "${email.subject ?? ""}" -> ${email.status}${email.reason ? ` (${email.reason})` : ""}`))}
 
+Measured mood of each conversation (ElevenLabs sentiment: score -1 to +1, frustration 0-100%), newest first:
+${list(detail.conversations.filter((c) => c.mood).slice(0, 15).map((c) => `${day(c.createdAt)} ${c.channel ?? ""}: ${c.mood!.label}, score ${c.mood!.score.toFixed(1)}, frustration ${Math.round(c.mood!.frustration * 100)}%`))}
+
 Live calls with staff (Aida rooms):
 ${list(detail.rooms.map((room) => `${day(room.createdAt)} ${room.title ?? "room"}${room.closedAt ? "" : " (still open)"}`))}
 
@@ -251,7 +262,7 @@ Return this JSON object and nothing else:
  "topics": ["up to 5 short topics"],
  "products": ["appliances or model numbers they mentioned, up to 5"],
  "sentiment": "positive | neutral | negative | unknown",
- "sentiment_reason": "one short sentence",
+ "sentiment_reason": "one short sentence; base the sentiment on the measured moods when there are any",
  "open_issues": ["things that do not look resolved yet, up to 3"],
  "next_action": "one concrete suggestion for CDA staff",
  "flags": ["only if present: complaint, safety concern, repeated contact, asked for a person, refund or legal"]}`;
