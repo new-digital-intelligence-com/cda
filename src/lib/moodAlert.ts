@@ -24,17 +24,42 @@ export function channelName(channel: string | null | undefined): string {
   return channel ? (CHANNEL_NAMES[channel] ?? channel) : "Unknown channel";
 }
 
+const isAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+/** Every address in STAFF_ALERT_EMAIL, forgiving quotes and spaces around them. */
+function listedAddresses(): string[] {
+  return (process.env.STAFF_ALERT_EMAIL ?? "")
+    .split(/[,;\s]+/)
+    .map((address) => address.trim().replace(/^["'<]+|["'>]+$/g, "").toLowerCase())
+    .filter(Boolean);
+}
+
 /** Never the CDA mailbox itself: Ellie would read the alert as a customer email. */
 function recipients(): string[] {
   const own = mailboxAddress();
-  return (process.env.STAFF_ALERT_EMAIL ?? "")
-    .split(/[,;\s]+/)
-    .map((address) => address.trim().toLowerCase())
-    .filter((address) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) && address !== own);
+  return listedAddresses().filter((address) => isAddress(address) && address !== own);
 }
 
 export function moodAlertsConfigured(): boolean {
   return mailConfigured() && recipients().length > 0;
+}
+
+export type MoodAlertStatus =
+  | { on: true; to: string[] }
+  | { on: false; reason: "mail_not_configured" | "no_address" | "only_cda_mailbox" | "invalid_address" };
+
+/** "jo***@example.com": enough for staff to recognise the address on the admin page. */
+const masked = (address: string) => address.replace(/^(.{1,2})[^@]*@/, "$1***@");
+
+/** Whether alerts can go out, and if not exactly why, for the admin page. */
+export function moodAlertStatus(): MoodAlertStatus {
+  const to = recipients();
+  if (to.length && mailConfigured()) return { on: true, to: to.map(masked) };
+  if (!mailConfigured()) return { on: false, reason: "mail_not_configured" };
+  const listed = listedAddresses();
+  if (!listed.length) return { on: false, reason: "no_address" };
+  if (listed.every((address) => address === mailboxAddress())) return { on: false, reason: "only_cda_mailbox" };
+  return { on: false, reason: "invalid_address" };
 }
 
 function adminLink(): string | null {

@@ -44,6 +44,16 @@ type Overview = {
   emails: { checked: number; upset: number };
   aida: { lines: number; frustrated: number };
   alertsOn: boolean;
+  alerts?: { on: true; to: string[] } | { on: false; reason: "mail_not_configured" | "no_address" | "only_cda_mailbox" | "invalid_address" };
+};
+
+/** Why alerts are off, in words staff can act on. */
+const ALERTS_OFF: Record<string, string> = {
+  no_address: "STAFF_ALERT_EMAIL is empty on this deployment: add it on Vercel (Production) and redeploy.",
+  only_cda_mailbox:
+    "STAFF_ALERT_EMAIL is the CDA mailbox itself, which is not allowed (Ellie would answer the alert as a customer email). Use another address and redeploy.",
+  invalid_address: "STAFF_ALERT_EMAIL does not look like an email address. Write it plainly (name@example.com; several separated by commas) and redeploy.",
+  mail_not_configured: "The mailbox that sends emails (gmail_sender and gmail_app_password) is not set on this deployment.",
 };
 
 const COLOR: Record<Label, string> = { positive: "#2a78d6", neutral: "#b4b2ab", negative: "#d03d3b" };
@@ -167,9 +177,11 @@ export function MoodPanel({ staffToken, onSignOut }: { staffToken: string; onSig
       {data && (
         <>
           <p className={`rounded-xl px-4 py-2 text-xs ${data.alertsOn ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-900"}`}>
-            {data.alertsOn
-              ? "Staff alerts are on: an email goes out when a customer is upset or Ellie promised a follow-up."
-              : "Staff alerts are off: add STAFF_ALERT_EMAIL on Vercel to email staff when a customer is upset. Unhappy conversations are still listed below."}
+            {data.alerts?.on
+              ? `Staff alerts are on: an email goes to ${data.alerts.to.join(", ")} when a customer is upset or Ellie promised a follow-up.`
+              : `Staff alerts are off. ${
+                  data.alerts && !data.alerts.on ? ALERTS_OFF[data.alerts.reason] : ALERTS_OFF.no_address
+                } Unhappy conversations are still listed below.`}
           </p>
 
           <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">

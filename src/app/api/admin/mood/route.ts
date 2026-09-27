@@ -1,6 +1,6 @@
 import { isStaffRequest } from "@/lib/aidaStaff";
 import { importMoods, markHandled, moodOverview } from "@/lib/mood";
-import { moodAlertsConfigured } from "@/lib/moodAlert";
+import { moodAlertStatus } from "@/lib/moodAlert";
 import { supabaseConfigured } from "@/lib/supabase";
 
 // The "😊 Mood" tab on /admin. Staff only (Aida staff token).
@@ -15,7 +15,8 @@ export async function GET(request: Request) {
   if (!supabaseConfigured()) return Response.json({ error: "The database is not configured" }, { status: 503 });
   const days = Number(new URL(request.url).searchParams.get("days"));
   try {
-    return Response.json({ ...(await moodOverview(PERIODS.has(days) ? days : 7)), alertsOn: moodAlertsConfigured() });
+    const alerts = moodAlertStatus();
+    return Response.json({ ...(await moodOverview(PERIODS.has(days) ? days : 7)), alertsOn: alerts.on, alerts });
   } catch (error) {
     console.error("mood overview failed", error);
     // Most likely supabase/schema.sql has not been run again since the mood tables were added.
