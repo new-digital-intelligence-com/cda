@@ -62,7 +62,11 @@ export type ConversationForMood = {
     conversation_initiation_source?: string | null;
     /** A Custom Channel conversation: external_id is the channel's trigger id. */
     async_metadata?: { external_id?: string | null } | null;
+    /** "public": started without a signed link, e.g. ElevenLabs' own talk-to page or its QR code. */
+    authorization_method?: string | null;
   } | null;
+  /** What the channel passed in at the start, e.g. Make's instagram_id in the first Instagram set-up. */
+  conversation_initiation_client_data?: { dynamic_variables?: Record<string, unknown> | null } | null;
   analysis?: {
     sentiment_analysis?: SentimentSummary | null;
     transcript_summary?: string | null;
@@ -169,9 +173,15 @@ const TRIGGER_CHANNELS: [string, string | undefined][] = [
   ["alexa", process.env.ALEXA_CHANNEL_INBOUND_URL],
 ];
 
+/** Triggers that no longer exist but still own old conversations. */
+const RETIRED_TRIGGERS: Record<string, string> = {
+  // The first Instagram connection, through Make.com (17–21 Sep 2026), before the web app took over.
+  trigger_cxn_0101m2pccemse2591rmxbbet8742: "instagram",
+};
+
 function channelOfTrigger(triggerId: string | null | undefined): string | null {
   if (!triggerId) return null;
-  return TRIGGER_CHANNELS.find(([, url]) => url?.includes(triggerId))?.[0] ?? null;
+  return TRIGGER_CHANNELS.find(([, url]) => url?.includes(triggerId))?.[0] ?? RETIRED_TRIGGERS[triggerId] ?? null;
 }
 
 /**
@@ -194,11 +204,14 @@ async function channelOf(record: ConversationForMood, conversationId: string): P
   if (/custom_channel/i.test(source)) {
     const byTrigger = channelOfTrigger(record.metadata?.async_metadata?.external_id);
     if (byTrigger) return byTrigger;
+    if (record.conversation_initiation_client_data?.dynamic_variables?.instagram_id) return "instagram";
     const emails = await rest<{ gmail_id: string }[]>(
       `email_messages?conversation_id=eq.${q(conversationId)}&select=gmail_id&limit=1`,
     ).catch(() => []);
     return emails.length ? "email" : "messaging";
   }
+  // ElevenLabs' own talk-to page and its QR code: no source, started without a signed link.
+  if ((!source || source === "unknown") && record.metadata?.authorization_method === "public") return "hosted";
   return null;
 }
 
@@ -560,7 +573,7 @@ export type FrustratedLine = {
 
 const emptyCounts = (): MoodCounts => ({ total: 0, positive: 0, neutral: 0, negative: 0 });
 /** Every channel of the demo is always listed, even in a period without conversations on it. */
-const DEMO_CHANNELS = ["website", "phone", "email", "telegram", "instagram", "messenger", "alexa", "intercom"];
+const DEMO_CHANNELS = ["website", "phone", "email", "telegram", "instagram", "messenger", "alexa", "intercom", "hosted"];
 const add = (counts: MoodCounts, moodLabel: MoodLabel) => {
   counts.total += 1;
   counts[moodLabel] += 1;

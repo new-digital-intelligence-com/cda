@@ -18,6 +18,7 @@ const CHANNEL_NAMES: Record<string, string> = {
   slack: "Slack",
   messaging: "Messaging app",
   intercom: "Intercom",
+  hosted: "ElevenLabs page / QR code",
 };
 
 export function channelName(channel: string | null | undefined): string {
